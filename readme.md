@@ -91,9 +91,30 @@ The planned tools and technologies include:
 - **Audio-processing libraries** — reading and analyzing audio files, selected according to dataset requirements.
 - **Google Colab** — execution, experiments, training, and evaluation.
 - **Google Drive** — persistent storage for the dataset, checkpoints, and experiment outputs.
+- **React, Vite, and TypeScript** — browser demonstration for recording, playback, and the proposed enhancement experience.
 - **Git and GitHub** — version control and collaboration.
 
 Dependencies will be finalized as the implementation develops.
+
+## Frontend Demonstration
+
+The repository includes a small browser interface in [`app/`](app/) for exploring the intended voice-aid experience: record speech, listen back, and preview the enhancement flow.
+
+**Important:** this frontend is a demonstration, not the enhancement model.
+
+- Recording and playback are real and run locally in the browser using the microphone and `MediaRecorder` APIs. Recordings are not uploaded.
+- The enhancement step currently plays a bundled sample clip and is labelled as a demo in the interface. It does not process the user's recording.
+- The real enhancement engine is not connected yet. Its interface will be defined alongside the research implementation.
+
+To run the frontend locally:
+
+```bash
+cd app
+npm install
+npm run dev
+```
+
+Open the local address printed by Vite. Microphone access requires `localhost` or an HTTPS connection.
 
 ## Development Environment
 
