@@ -1,6 +1,10 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 import App from './App';
+import { ProfileProvider } from './context/ProfileContext';
+import { RecordingProvider } from './context/RecordingContext';
+import './styles.css';
 
 const rootElement = document.getElementById('root');
 
@@ -10,6 +14,12 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <App />
+    <BrowserRouter>
+      <ProfileProvider>
+        <RecordingProvider>
+          <App />
+        </RecordingProvider>
+      </ProfileProvider>
+    </BrowserRouter>
   </StrictMode>,
 );

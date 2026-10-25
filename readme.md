@@ -104,6 +104,7 @@ The repository includes a small browser interface in [`app/`](app/) for explorin
 
 - Recording and playback are real and run locally in the browser using the microphone and `MediaRecorder` APIs. Recordings are not uploaded.
 - The enhancement step currently plays a bundled sample clip and is labelled as a demo in the interface. It does not process the user's recording.
+- The written interface includes a welcome page, the recording workflow, and a profile page for browser-local display and accessibility preferences. No account or backend is connected.
 - The real enhancement engine is not connected yet. Its interface will be defined alongside the research implementation.
 
 To run the frontend locally:

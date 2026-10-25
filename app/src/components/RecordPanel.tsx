@@ -1,4 +1,5 @@
 import ErrorNotice from './ErrorNotice';
+import { MicrophoneIcon, StopIcon } from './icons';
 import { MAX_RECORDING_SECONDS, type RecorderStatus } from '../hooks/useRecorder';
 
 interface RecordPanelProps {
@@ -24,29 +25,6 @@ function formatTimer(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
-function MicrophoneIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
-      <path
-        d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function StopIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor" />
-    </svg>
-  );
 }
 
 export default function RecordPanel({
