@@ -10,7 +10,7 @@ task. Update it only with observed evidence.
 |---|---|---|
 | `RECOVERY.ipynb` | Runtime, Drive/repo, cache, Hugging Face, checkpoint, ClearerVoice recovery | cache directories only |
 | `MAINFILE.ipynb` | Read-only workflow over existing Drive artifacts | none |
-| `prev_files/MAINFILE_monolithic_2026-11-21.ipynb` | Archived 155-cell history (dataset v1/v2/v3 generation, IRM, Wiener, FRCRN drafts) | none |
+| `prev_files/MAINFILE_monolithic_2026-11-21.ipynb` | Archived 155-cell history (dataset v1/v2/v3 generation, IRM, Wiener, FRCRN drafts); local-only, git-ignored | none |
 | `docs/dataset_structure.md` | Dataset structure and audit record | — |
 | `progress.md` | Dataset-generation progress narrative | — |
 
@@ -82,11 +82,15 @@ Run `RECOVERY.ipynb` first in a fresh Colab runtime, then `MAINFILE.ipynb`.
 5. **Historical path ambiguity.** Some archived diagnostics ran with `DATASET_DIR`
    pointing at `vaani_telugu_transcribed` (246 rows) instead of `paired_dataset_v3`
    (1,000 rows). The new notebooks pin `paired_dataset_v3` explicitly.
-6. **Uncommitted work.** `MAINFILE.ipynb`, `RECOVERY.ipynb`, `intelli_speech/`, `tests/`,
-   `scripts/`, `prev_files/`, and `opencode.json` are untracked in Git. A Colab clone
-   will not contain them until they are committed.
-7. **Pre-existing working-tree changes not made by this task:** `readme.md` is modified
-   and `Copy_of_Copy_of_code.ipynb` is deleted. They were left untouched.
+6. **Repository sync — resolved 2026-11-21.** The restructure (`MAINFILE.ipynb`,
+   `RECOVERY.ipynb`, `intelli_speech/`, `tests/`, `scripts/`, `opencode.json`,
+   `AGENTS.md`, `pyproject.toml`, `requirements-colab.txt`, docs) was committed and
+   pushed to `origin/main` (`16db1c4`, `e9af1a8`). `prev_files/` is untracked and
+   git-ignored by decision; the archives remain on disk locally only.
+7. **Pre-existing working-tree changes not made by this task:** the `readme.md`
+   modification (the "Reusable Python utilities" section) was reviewed and committed
+   with the sync. The deletion of `Copy_of_Copy_of_code.ipynb` remains uncommitted and
+   untouched.
 
 ## 3. Decisions
 
@@ -100,7 +104,8 @@ Run `RECOVERY.ipynb` first in a fresh Colab runtime, then `MAINFILE.ipynb`.
 3. **History is archived, not deleted.** The 155-cell, 57.9 MB monolithic notebook was
    copied byte-for-byte to `prev_files/MAINFILE_monolithic_2026-11-21.ipynb`
    (SHA-256 `FAFFF8829B2452BD7369D6A8F2F51B3B0B03E7BA34C065A6439B2404D104FC58`).
-   `prev_files/MAINFILE_before_cleanup.ipynb` was left untouched.
+   `prev_files/MAINFILE_before_cleanup.ipynb` was left untouched. As of 2026-11-21,
+   `prev_files/` is untracked and git-ignored (kept locally only).
 4. **No automatic dependency changes.** No cell installs, upgrades, or downgrades
    anything. Resolving ClearerVoice/NumPy requires an explicit, recorded decision.
 5. **No dataset regeneration, downloads, or inference** were performed or scripted as
@@ -129,8 +134,9 @@ state. It requires no installs, no downloads, and no dataset changes.
 2. Define and run the baseline evaluation: SNR improvement plus PESQ/STOI where the
    metric licensing and 16 kHz inputs permit, on the 50-source test split, for the
    Wiener baseline.
-3. Commit `intelli_speech/`, `tests/`, `scripts/`, both notebooks, and this file so the
-   Colab clone matches the local state.
+3. **Done 2026-11-21** — committed `intelli_speech/`, `tests/`, `scripts/`, both
+   notebooks, and this file so the Colab clone matches the local state (`16db1c4`,
+   pushed to `origin/main`).
 4. Only after (1)–(3): one-sample FRCRN enhancement, listened to and compared against
    the baseline, saved under `experiments/clearvoice_frcrn/` without overwriting.
 
@@ -153,3 +159,15 @@ state. It requires no installs, no downloads, and no dataset changes.
 - Any ClearerVoice import or FRCRN inference in the current runtime.
 - Objective enhancement metrics for any method.
 - Perceptual quality of the Wiener baseline beyond the recorded 12-sample listening pass.
+
+## 7. Runtime verification — pending
+
+To be completed in a fresh Colab runtime: run `RECOVERY.ipynb` steps 1–6, then
+`MAINFILE.ipynb` top to bottom. Capture:
+
+- [ ] Python / NumPy / PyTorch versions
+- [ ] Whether `analysis_cache/stft_example.npz` loaded
+- [ ] iSTFT round-trip error
+- [ ] `experiments/` artifact listing
+- [ ] Whether any FRCRN checkpoint was found
+- [ ] Observed output pasted below
