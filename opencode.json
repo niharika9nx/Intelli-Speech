@@ -1,0 +1,229 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/deepseek-v4.1-flash-free",
+  "default_agent": "plan",
+  "policies": [
+    {
+      "action": "provider.use",
+      "resource": "*",
+      "effect": "deny"
+    },
+    {
+      "action": "provider.use",
+      "resource": "opencode",
+      "effect": "allow"
+    }
+  ],
+  "agents": {
+    "plan": {
+      "description": "Read-only lead architect for Intelli-Speech planning and technical investigations.",
+      "mode": "primary",
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "permissions": [
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "ask"
+        },
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "subagent",
+          "resource": "repository-explorer",
+          "effect": "allow"
+        },
+        {
+          "action": "subagent",
+          "resource": "runtime-researcher",
+          "effect": "allow"
+        },
+        {
+          "action": "subagent",
+          "resource": "code-reviewer",
+          "effect": "allow"
+        }
+      ]
+    },
+    "build": {
+      "description": "Primary implementation agent for approved, scoped Intelli-Speech changes.",
+      "mode": "primary",
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "permissions": [
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "subagent",
+          "resource": "repository-explorer",
+          "effect": "allow"
+        },
+        {
+          "action": "subagent",
+          "resource": "test-author",
+          "effect": "allow"
+        },
+        {
+          "action": "subagent",
+          "resource": "documentation-editor",
+          "effect": "allow"
+        },
+        {
+          "action": "subagent",
+          "resource": "code-reviewer",
+          "effect": "allow"
+        },
+        {
+          "action": "shell",
+          "resource": "git commit *",
+          "effect": "ask"
+        },
+        {
+          "action": "shell",
+          "resource": "git push *",
+          "effect": "ask"
+        }
+      ]
+    },
+    "repository-explorer": {
+      "description": "Read-only repository search and implementation mapping.",
+      "mode": "subagent",
+      "model": "opencode/nemotron-3.5-lightning-free",
+      "system": "Inspect the Intelli-Speech repository for the assigned question. Do not edit files or run shell commands. Report concise findings with exact paths, relevant symbols, and evidence. Treat notebooks and data paths as user work; never propose deleting or replacing them.",
+      "permissions": [
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "runtime-researcher": {
+      "description": "Read-only investigation of Python, package, Colab, and FRCRN runtime compatibility.",
+      "mode": "subagent",
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "system": "Investigate the assigned runtime issue using repository evidence and authoritative documentation. Do not edit files, run shell commands, install packages, or recommend dependency changes without verifying Python and wheel compatibility. Separate verified facts from assumptions and provide sources.",
+      "permissions": [
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "test-author": {
+      "description": "Writes focused tests for an approved implementation task.",
+      "mode": "subagent",
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "system": "Write only focused tests that cover the requested behavior. Do not modify production code, notebooks, datasets, or unrelated files. Inspect existing test conventions first. Do not commit or push changes.",
+      "permissions": [
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "edit",
+          "resource": "tests/**",
+          "effect": "allow"
+        },
+        {
+          "action": "edit",
+          "resource": "**/*.test.*",
+          "effect": "allow"
+        },
+        {
+          "action": "edit",
+          "resource": "**/*.spec.*",
+          "effect": "allow"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "documentation-editor": {
+      "description": "Updates directly related Intelli-Speech documentation only.",
+      "mode": "subagent",
+      "model": "opencode/nemotron-3.5-lightning-free",
+      "system": "Update only documentation directly required by the assigned code change. Keep claims evidence-based and distinguish proposed, implemented, and tested behavior. Do not edit notebooks, source code, datasets, or generated artifacts. Do not commit or push changes.",
+      "permissions": [
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "edit",
+          "resource": "*.md",
+          "effect": "allow"
+        },
+        {
+          "action": "edit",
+          "resource": "docs/**",
+          "effect": "allow"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    },
+    "code-reviewer": {
+      "description": "Read-only review of scoped changes for correctness and regressions.",
+      "mode": "subagent",
+      "model": "opencode/nemotron-3.5-lightning-free",
+      "system": "Review only the assigned diff or files. Do not edit files or run shell commands. Report actionable findings ordered by severity, with exact file paths and line references. If no issues are found, say so and note any validation limits.",
+      "permissions": [
+        {
+          "action": "edit",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "shell",
+          "resource": "*",
+          "effect": "deny"
+        },
+        {
+          "action": "subagent",
+          "resource": "*",
+          "effect": "deny"
+        }
+      ]
+    }
+  }
+}
+

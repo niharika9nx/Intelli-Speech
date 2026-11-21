@@ -17,7 +17,7 @@ from typing import Any, Iterable
 
 
 DEFAULT_ROOT = Path(
-    "/content/drive/MyDrive/Intelli-Speech-data/vaani_telugu_transcribed"
+    "/content/drive/MyDrive/Intelli-Speech-data/paired_dataset_v3"
 )
 AUDIO_EXTENSIONS = {
     ".aac", ".aif", ".aiff", ".flac", ".m4a", ".mp3", ".oga", ".ogg",

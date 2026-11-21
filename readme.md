@@ -60,26 +60,28 @@ The final architecture will depend on the dataset characteristics, availability 
 
 ## Dataset
 
-The project uses an existing Telugu subset of the Vaani transcribed speech dataset stored in Google Drive.
+The project uses a paired Telugu speech dataset (`paired_dataset_v3`) prepared for speech-enhancement research. It was built from OpenSLR SLR66 clean speech and DEMAND environmental noise, and it has been generated, independently audited (21/21 checks passed), and reviewed through listening tests.
 
 **Dataset location in Google Colab:**
 
-`/content/drive/MyDrive/Intelli-Speech-data/vaani_telugu_transcribed`
+`/content/drive/MyDrive/Intelli-Speech-data/paired_dataset_v3`
+
+**Verified composition:**
+
+- 500 clean speech targets (16 kHz mono) derived from OpenSLR SLR66.
+- 1,000 noisy mixtures at target SNR levels of 5 dB and 10 dB (two noisy variants per source).
+- 80/10/10 train/validation/test split with no candidate speaker overlap across splits.
+- 200 mixtures per DEMAND noise category (DKITCHEN, NPARK, OOFFICE, STRAFFIC, TBUS).
 
 The dataset remains in Google Drive and is accessed from Colab after mounting the drive with the user's authorization.
 
-Before model development, the dataset will be examined to establish:
+The dataset has not yet been used to train or evaluate a model. The enhancement objective, evaluation protocol, and model architecture are still being defined.
 
-- Directory structure and file inventory.
-- Audio formats, sample rates, channels, and durations.
-- Metadata structure and transcript availability.
-- Mapping between audio files and transcripts.
-- Missing files, unreadable samples, and other data-quality issues.
-- Whether the available data supports the intended speech-enhancement objective.
+**Important:** The dataset uses controlled synthetic noise mixtures; performance on naturally noisy speech remains untested.
 
-**Important:** Transcribed speech does not automatically provide paired noisy and clean audio. The suitability of the dataset for supervised speech enhancement must be verified before choosing a training strategy.
+The VAANI Telugu recordings (`vaani_telugu_transcribed`) are retained in Drive as supplementary real-world noisy-speech evaluation candidates, subject to suitability checks.
 
-The original dataset must remain unchanged. Dataset files are not stored in this GitHub repository.
+The original source recordings must remain unchanged. Dataset files are not stored in this GitHub repository.
 
 ## Technology Stack
 
@@ -146,7 +148,7 @@ drive.mount("/content/drive")
 
 DATASET_PATH = Path(
     "/content/drive/MyDrive/Intelli-Speech-data/"
-    "vaani_telugu_transcribed"
+    "paired_dataset_v3"
 )
 
 if not DATASET_PATH.is_dir():
@@ -160,6 +162,30 @@ print("Dataset directory found:", DATASET_PATH)
 This only verifies that the directory exists; it does not validate the dataset contents or training suitability.
 
 Colab runtime storage is temporary. Save checkpoints and experiment outputs to an appropriate location in Google Drive if they need to persist across sessions.
+
+## Reusable Python utilities
+
+The repository now includes a small, notebook-independent Python foundation:
+
+- `intelli_speech/audio_io.py` resolves metadata-relative paths, loads and writes
+  validated mono audio, and rejects empty, non-finite, or unexpected-format samples.
+- `intelli_speech/metrics.py` provides SNR, RMS, peak, and clipping calculations.
+- `scripts/setup_colab_runtime.py` reports the runtime and ClearerVoice dependency
+  state without installing or downgrading packages.
+- `requirements-colab.txt` records the currently considered Colab dependency set.
+  It is a reference manifest, not a license for an automatic downgrade.
+
+Run focused utility tests from the repository root:
+
+```bash
+python -m pytest
+```
+
+Run local runtime diagnostics:
+
+```bash
+python scripts/setup_colab_runtime.py
+```
 
 ## Research Workflow
 

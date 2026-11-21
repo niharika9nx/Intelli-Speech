@@ -58,7 +58,7 @@ The notebook must be synchronized with the latest GitHub version before executio
 
 The existing dataset is stored at:
 
-`/content/drive/MyDrive/Intelli-Speech-data/vaani_telugu_transcribed`
+`/content/drive/MyDrive/Intelli-Speech-data/paired_dataset_v3`
 
 This path is available in Colab after Google Drive is mounted. It is not a path on the local Windows machine.
 
