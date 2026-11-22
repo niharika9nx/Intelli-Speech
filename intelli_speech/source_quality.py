@@ -28,8 +28,11 @@ from . import acoustic_features as af
 
 @dataclass(frozen=True)
 class QualityConfig:
-    min_snr_db: float = 15.0
-    min_bandwidth_hz: float = 3000.0
+    # Pilot (2026-11-22): Vaani 99 %-energy bandwidth median ~1.6 kHz; the atypical
+    # speakers span 1.2-5.0 kHz on the same measure, so 1.2 kHz is the floor. SNR estimate
+    # median ~15.6 dB; 12 dB rejects only the noisiest part (review on pilot quantiles).
+    min_snr_db: float = 12.0
+    min_bandwidth_hz: float = 1200.0
     min_speech_time_s: float = 1.5
     min_activity_ratio: float = 0.40
     reject_clipping: bool = True

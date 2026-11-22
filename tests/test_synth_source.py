@@ -106,6 +106,9 @@ def test_quality_phase_marks_and_splits(tmp_path: Path) -> None:
     quality = pd.read_csv(out / "quality.csv")
     assert quality.loc[~quality.quality_pass, "split"].isna().all()
     assert set(quality.loc[quality.usable, "split"]) <= {"train", "val", "test"}
-    assert json.loads((out / "quality_summary.json").read_text())["thresholds"]["min_snr_db"] == 15.0
+    assert json.loads((out / "quality_summary.json").read_text())["thresholds"]["min_snr_db"] == 12.0
     with pytest.raises(FileExistsError):
         build.run(build.build_parser().parse_args(["--phase", "quality", "--data-root", str(data_root)]))
+    strict = build.run(build.build_parser().parse_args(
+        ["--phase", "quality", "--data-root", str(data_root), "--min-snr-db", "500", "--overwrite-quality"]))
+    assert strict["clips_pass"] == 0 and strict["thresholds"]["min_snr_db"] == 500.0

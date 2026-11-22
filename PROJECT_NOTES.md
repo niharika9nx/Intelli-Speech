@@ -68,6 +68,21 @@ Each component's contribution is shown by ablation under leave-one-speaker-out e
 - **Pilot:** about 60 speakers, about 1,000 clips that pass the filter, in `synth_source_v1_pilot/`.
 - **Full run (after the pilot is reviewed):** about 300 speakers, about 6,000 clips, about 10 h.
 
+**Synthetic-source pilot, run 1 (2026-11-22): failed as a selection, kept as a record.**
+- **What happened:**
+  - 30 shards were scanned (49,297 rows, 1,865 speaker IDs; 2,207 rows removed as control speakers), but only 1 "speaker" was eligible.
+  - That one was a placeholder ID covering 5 districts (it is read back as NaN, which is why the download reported 0 speakers). Only 10 clips were downloaded, to `synth_source_v1_pilot/`; ignore that folder.
+- **Quality on those 10 clips:**
+  - The 99 %-energy bandwidth median is 1.6 kHz, so the 3 kHz floor was wrong for Vaani. The floor is now 1.2 kHz, the lowest atypical speaker on the same measure.
+  - The SNR-estimate median is 15.6 dB; the threshold moved from 15 to 12 dB, to be reviewed on run 2's quantiles.
+- **Fixes:**
+  - Placeholder speaker and utterance IDs are filtered.
+  - Rows without an utterance ID are deduplicated by parquet position, not collapsed together.
+  - Shards are scanned in runs of 3 consecutive shards.
+  - The speaker count is now a ceiling (200), the minimum is 5 clips per speaker, and the clip total binds.
+  - The notebook's cell-5 syntax error is fixed.
+- **Run 2** writes to `synth_source_v1_pilot_r2/`.
+
 **Technical decisions (2026-11-22):**
 - **VAD:** an adaptive energy VAD (frames more than 35 dB below the 95th percentile, or within 6 dB of the floor, count as non-speech). It is deterministic and needs no download. It is less robust in noisy recordings, so a neural VAD (Silero) is a possible later upgrade.
 - **Speaking rate without transcripts:** acoustic syllable nuclei, de Jong & Wempe style (voiced intensity peaks with a dip of at least 2 dB). Articulation rate = nuclei / (active time − pauses ≥ 250 ms). The transcript-based akshara rate stays blocked until A2 resolves which script each field uses.

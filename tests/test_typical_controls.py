@@ -143,3 +143,25 @@ def test_build_script_plan_then_download(tmp_path: Path, monkeypatch) -> None:
         build.run(build.build_parser().parse_args(["--phase", "download", *base]), fs=fs)
     with pytest.raises(FileExistsError):
         build.run(build.build_parser().parse_args(["--phase", "plan", *base]), fs=fs)
+
+
+def test_placeholder_ids_filtered_and_missing_utterance_ids_not_collapsed() -> None:
+    meta = _metadata(8, 6)
+    meta.loc[meta.speakerID == "spk000", "speakerID"] = "None"  # placeholder, must not become a speaker
+    meta.loc[meta.speakerID == "spk001", "UtteranceSequenceID"] = None  # must not collapse to 1 row
+    selected, report = select_controls(meta, SelectionConfig(n_speakers=10, max_per_speaker=6, max_total=100,
+                                                             min_per_speaker=5, require_transcript=False))
+    assert report["invalid_speaker_id_rows"] == 6 and report["missing_utterance_id_rows"] == 6
+    assert "None" not in set(selected.speakerID)
+    assert (selected.speakerID == "spk001").sum() == 6 and report["selected_speakers"] == 7
+
+
+def test_block_subset_takes_consecutive_runs() -> None:
+    from intelli_speech.vaani_controls import block_subset
+
+    items = [f"s{i:03d}" for i in range(100)]
+    chosen = block_subset(items, 9, 3)
+    idx = [items.index(c) for c in chosen]
+    assert len(chosen) == 9 and idx[:3] == [0, 1, 2] and idx[-1] == 99
+    assert all(idx[i + 1] - idx[i] == 1 for i in (0, 1, 3, 4, 6, 7))
+    assert block_subset(items, None, 3) == items

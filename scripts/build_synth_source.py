@@ -45,15 +45,16 @@ from intelli_speech.vaani_controls import (
     list_telugu_shards,
     scan_metadata,
     select_controls,
-    spread_subset,
+    block_subset,
 )
 
 DEFAULT_DATA_ROOT = Path("/content/drive/MyDrive/Intelli-Speech-data")
 SALT = "intelli-speech-synth-source-v1"
 PRESETS = {
-    # ~30 % oversampling over the clip target to absorb the quality filter.
-    "pilot": {"n_speakers": 65, "max_per_speaker": 20, "max_total": 1300, "min_per_speaker": 10, "max_shards": 30},
-    "full": {"n_speakers": 430, "max_per_speaker": 20, "max_total": 8600, "min_per_speaker": 10, "max_shards": 80},
+    # Clip target + ~30 % oversampling for the quality filter. n_speakers is a ceiling:
+    # Vaani speakers contribute few clips per scanned shard, so the clip total binds first.
+    "pilot": {"n_speakers": 200, "max_per_speaker": 20, "max_total": 1300, "min_per_speaker": 5, "max_shards": 30, "shard_block": 3},
+    "full": {"n_speakers": 1000, "max_per_speaker": 20, "max_total": 8600, "min_per_speaker": 5, "max_shards": 120, "shard_block": 3},
 }
 PROTECTED = ("vaani_telugu_transcribed", "paired_dataset_v3", "typical_controls_v2", "openslr_slr66")
 
@@ -64,10 +65,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--set", dest="set_name", choices=tuple(PRESETS), default="pilot")
     parser.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT)
     parser.add_argument("--output-dir", type=Path, default=None)
-    for key in ("n_speakers", "max_per_speaker", "max_total", "min_per_speaker", "max_shards"):
+    for key in ("n_speakers", "max_per_speaker", "max_total", "min_per_speaker", "max_shards", "shard_block"):
         parser.add_argument(f"--{key.replace('_', '-')}", type=int, default=None, help="Override the preset.")
-    parser.add_argument("--min-pass-per-speaker", type=int, default=5)
+    parser.add_argument("--min-pass-per-speaker", type=int, default=3)
+    defaults = QualityConfig()
+    parser.add_argument("--min-snr-db", type=float, default=defaults.min_snr_db)
+    parser.add_argument("--min-bandwidth-hz", type=float, default=defaults.min_bandwidth_hz)
+    parser.add_argument("--min-speech-time-s", type=float, default=defaults.min_speech_time_s)
+    parser.add_argument("--min-activity-ratio", type=float, default=defaults.min_activity_ratio)
     parser.add_argument("--overwrite-plan", action="store_true")
+    parser.add_argument("--overwrite-quality", action="store_true", help="Quality outputs are derived; audio is never touched.")
     return parser
 
 
@@ -127,7 +134,7 @@ def plan_phase(args, fs, output: Path, data_root: Path) -> dict[str, Any]:
     shards_all = list_telugu_shards(fs)
     if not shards_all:
         raise FileNotFoundError("No Telugu parquet shards found; check access conditions and repo layout.")
-    shards = spread_subset(shards_all, settings["max_shards"])
+    shards = block_subset(shards_all, settings["max_shards"], settings["shard_block"])
     metadata = scan_metadata(fs, shards)
     ids = metadata["speakerID"].astype(str).str.strip()
     removed = int(ids.isin(excluded).sum())
@@ -184,7 +191,7 @@ def quality_phase(args, output: Path, config: QualityConfig = QualityConfig()) -
     manifest_path = output / "manifest.csv"
     if not manifest_path.is_file():
         raise FileNotFoundError("manifest.csv missing; run --phase download first.")
-    quality_path = refuse_overwrite(output / "quality.csv", overwrite=False)
+    quality_path = refuse_overwrite(output / "quality.csv", overwrite=args.overwrite_quality)
     manifest = pd.read_csv(manifest_path, dtype={"speakerID": str})
     rows = []
     for _, item in manifest[manifest["status"] == "ok"].iterrows():
@@ -229,7 +236,8 @@ def quality_phase(args, output: Path, config: QualityConfig = QualityConfig()) -
                          "gender_speakers": g.drop_duplicates("speakerID")["gender"].astype(str).value_counts().to_dict()}
                      for s, g in usable.groupby("split")},
         "usable_with_transcript": int(usable["has_transcript"].fillna(False).astype(bool).sum()),
-        "metric_medians_all": {c: float(quality[c].median()) for c in ("snr_db_estimate", "effective_bandwidth_hz", "speech_activity_ratio") if c in quality},
+        "metric_quantiles_all": {c: quality[c].quantile([0.1, 0.25, 0.5, 0.75, 0.9]).round(2).tolist()
+                                 for c in ("snr_db_estimate", "effective_bandwidth_hz", "speech_activity_ratio", "speech_time_s") if c in quality},
     }
     write_json(output / "quality_summary.json", summary)
     return summary
@@ -245,7 +253,9 @@ def run(args: argparse.Namespace, fs=None) -> dict[str, Any]:
         return plan_phase(args, fs or default_fs(), output, data_root)
     if args.phase == "download":
         return download_phase(fs or default_fs(), output)
-    return quality_phase(args, output)
+    config = QualityConfig(min_snr_db=args.min_snr_db, min_bandwidth_hz=args.min_bandwidth_hz,
+                           min_speech_time_s=args.min_speech_time_s, min_activity_ratio=args.min_activity_ratio)
+    return quality_phase(args, output, config)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

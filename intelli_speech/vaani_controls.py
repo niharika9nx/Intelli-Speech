@@ -46,6 +46,8 @@ METADATA_COLUMNS = (
     "UtteranceSequenceID",
 )
 TARGET_SAMPLE_RATE = 16000
+# Placeholder strings that are not speaker/utterance identities (pandas also reads them as NaN).
+INVALID_SPEAKER_IDS = frozenset({"", "none", "nan", "null", "na", "n/a", "unknown", "-"})
 SALT = "intelli-speech-typical-controls-v2"
 
 
@@ -80,6 +82,20 @@ def spread_subset(items: list[str], k: int | None) -> list[str]:
         return list(items)
     index = np.unique(np.linspace(0, len(items) - 1, k).round().astype(int))
     return [items[i] for i in index]
+
+
+def block_subset(items: list[str], k: int | None, block: int) -> list[str]:
+    """``k`` shards as evenly spaced runs of ``block`` consecutive shards.
+
+    Consecutive shards are more likely to hold several clips of the same speaker, while
+    spacing the runs keeps district diversity.
+    """
+    if k is None or k >= len(items):
+        return list(items)
+    block = max(1, min(block, k))
+    starts = spread_subset(list(range(len(items) - block + 1)), -(-k // block))
+    chosen = sorted({s + j for s in starts for j in range(block)})
+    return [items[i] for i in chosen][: max(k, block)]
 
 
 def _truthy(value: Any) -> bool:
@@ -125,13 +141,24 @@ def select_controls(metadata: pd.DataFrame, config: SelectionConfig = SelectionC
             has_text &= flag.map(_truthy) | flag.isna()
         frame = frame[has_text]
     report["transcribed_rows"] = int(len(frame))
-    frame = frame[frame["speakerID"].notna() & (frame["speakerID"].astype(str).str.strip() != "")]
-    frame = frame.assign(speakerID=frame["speakerID"].astype(str).str.strip())
+    ids = frame["speakerID"].astype(str).str.strip()
+    valid = frame["speakerID"].notna() & ~ids.str.lower().isin(INVALID_SPEAKER_IDS)
+    report["invalid_speaker_id_rows"] = int((~valid).sum())
+    frame = frame[valid].assign(speakerID=ids[valid])
 
-    # One row per (speaker, utterance id) to prevent duplicates across shards.
-    utt = frame["UtteranceSequenceID"].astype(str) if "UtteranceSequenceID" in frame else frame["_row"].astype(str)
+    # One row per (speaker, utterance id) to prevent duplicates across shards. Rows without
+    # an utterance id fall back to their parquet position (never collapsed together).
+    position = frame["_shard"].astype(str) + "#" + frame["_row_group"].astype(str) + "#" + frame["_row"].astype(str)
+    if "UtteranceSequenceID" in frame:
+        raw = frame["UtteranceSequenceID"]
+        missing = raw.isna() | raw.astype(str).str.strip().str.lower().isin(INVALID_SPEAKER_IDS)
+        report["missing_utterance_id_rows"] = int(missing.sum())
+        utt = raw.astype(str).where(~missing, "pos:" + position)
+    else:
+        utt = "pos:" + position
     frame = frame.assign(_utt=utt).drop_duplicates(subset=["speakerID", "_utt"])
     counts = frame.groupby("speakerID").size()
+    report["clips_per_speaker_seen"] = counts.describe().round(2).to_dict() if counts.size else {}
     eligible = counts[counts >= config.min_per_speaker].index.tolist()
     report["speakers_seen"] = int(counts.size)
     report["eligible_speakers"] = len(eligible)
