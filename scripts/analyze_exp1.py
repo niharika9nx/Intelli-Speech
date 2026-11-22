@@ -36,7 +36,7 @@ from intelli_speech.grouped_stats import cliffs_delta
 ID_COLUMNS = {"dataset", "group", "record_id", "speaker_id", "difficulty_level", "prompt_file_type", "gender",
               "district", "error", "feature_version", "full_scale_verdict"}
 CHANNEL_COLUMNS = ("effective_bandwidth_hz", "rms_dbfs", "near_full_scale_fraction")
-EXCLUDED_FEATURES = {"duration_s", "nuclei_count", "active_duration_s", "speech_time_s", "phonation_time_s"}
+EXCLUDED_FEATURES = {"duration_s", "speech_frames", "nuclei_count", "active_duration_s", "speech_time_s", "phonation_time_s"}
 FAMILIES = (("pause", "temporal"), ("speech_", "temporal"), ("articulation", "temporal"), ("internucleus", "temporal"),
             ("f0_", "prosodic"), ("voiced", "prosodic"), ("intensity", "prosodic"), ("energy_mod", "prosodic"),
             ("nucleus_prom", "prosodic"), ("hnr", "voice"), ("cpps", "voice"), ("jitter", "voice"), ("shimmer", "voice"),

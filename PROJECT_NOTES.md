@@ -21,7 +21,7 @@ task. Update it only with observed evidence.
 | Exp 0b follow-up (clipping, transcription scripts, difficulty) | **run** 2026-11-22 | Drive `analysis_v2/audit_followup_2026-11-22/` |
 | Balanced typical controls (≤40 spk × ≤10 clips, ≤400) | **run** 2026-11-22: 40 spk (20 F / 20 M), 126 clips, 12.4 min | Drive `typical_controls_v2/` (manifest + provenance, rev `9e6ed4f`) |
 | Speaker-independent folds | not started | — |
-| **2 Characterization (Exp 1–2)** | **run** 2026-11-22 (400 recordings, 0 errors): 17 candidate_class1 (all temporal + energy-modulation rate), 17 speaker_specific, 14 not_supported, 2 channel_confounded; robustness check (`scripts/exp1_robustness.py`, cell 6) implemented, tested, **not run** | features: `intelli_speech/acoustic_features.py` (`exp1-features-0.1`); `scripts/extract_features_exp1.py`; `scripts/analyze_exp1.py` (speaker-level catalogue); `EXP1_CHARACTERIZATION.ipynb` |
+| **2 Characterization (Exp 1–2)** | **run** 2026-11-22 (400 recordings, 0 errors): 17 candidate_class1 (all temporal + energy-modulation rate), 17 speaker_specific, 14 not_supported, 2 channel_confounded; robustness **run** 2026-11-22: **14 robust class-1 features** (see below) | features: `intelli_speech/acoustic_features.py` (`exp1-features-0.1`); `scripts/extract_features_exp1.py`; `scripts/analyze_exp1.py` (speaker-level catalogue); `EXP1_CHARACTERIZATION.ipynb` |
 | **3 Synthetic + models** | not started | — |
 | **4 Integration + evaluation** | not started | — |
 | **5 Prototype + delivery** | v1 app plumbing only (noise model) | `server/`, `app/` |
@@ -43,6 +43,30 @@ task. Update it only with observed evidence.
 - **A2 scripts:** intended transcriptions are Telugu script (189/189; 3 stray Kannada signs). Verbatim transcriptions are mixed: 106 Telugu-dominant, 83 Latin-dominant (romanised), with annotation tags (`<>`, `{}`, `[]`). Typical copy: 197 Telugu / 49 Latin, same tags. → The verbatim-vs-intended CER (mean 1.13) mostly measures script/markup mismatch and is **not** an intelligibility measure; transcript-based akshara rates are not usable for verbatim text. Speaking rate stays acoustic.
 - **A3 difficulty:** card says only "from QC understandability rating"; reviewers are "not specialists in atypical speech"; intended text is written by people familiar with the speaker. Direction remains **UNKNOWN**. The only within-speaker association (Medium < Low on CER, p = 0.012, 5 speakers) is confounded by script mixing. → difficulty_level is a descriptive covariate only, never a severity label or target.
 - **Controls v2:** 30/872 shards scanned; 3,334 transcribed rows, 47 eligible speakers, 40 selected; 3–5 clips per speaker (cap 10 not reached: few transcribed clips per speaker); 16 kHz native, 0 decode errors, 0 duplicates. Districts are skewed (Manyam 14, Krishna 7 speakers). Control clips are short (~6 s) vs atypical (~35 s) → features are rate/proportion based; duration is reported but excluded.
+
+**Exp 1 confirmed pattern catalogue (2026-11-22):** class 1 in the main analysis, against the second control set (`vaani_copy`) and with atypical audio cut into 5.8 s windows (1,126 windows):
+- **Rate:** speech rate and articulation rate (acoustic syllable nuclei) lower, 7/7 speakers in all three.
+- **Pauses:** more pauses (≥250 ms, ≥500 ms per minute), longer pauses (P90 at all thresholds, median ≥500 ms), more variable pauses (IQR ≥150/250 ms), larger pause-time fraction (all thresholds).
+- **Activity:** lower speech-activity ratio.
+- **Not robust:** energy-modulation peak (6/7 main, 2/7 vs vaani_copy); median pause ≥150/250 ms (fails vs vaani_copy).
+- **Speaker-specific / not shared:** F0 SD and range (1/7), voiced fraction, rhythm CV/nPVI, voice quality (HNR, CPPS, jitter, shimmer), MFCC/spectral shape.
+- **Limits:** both control sets are regular Vaani (same collection pipeline); atypical clips peak-normalised; 7 speakers (two with 5 clips); syllable counts are acoustic estimates. Not clinical markers.
+- **Implication for Phase 3:** synthetic transforms are primarily temporal (articulation-rate slowing, pause insertion/lengthening, distribution matched per fold); pitch changes speaker-specific (random per synthetic speaker); no shared spectral target yet.
+
+**Decision 2026-11-22: component roles (approved by the user).** The two-stage system is kept: Stage 1 is the v1 noise model (SLR66 + DEMAND + `paired_dataset_v3`), and Stage 2 is atypical-speech processing. Exp 1 showed the shared atypical pattern is temporal, while spectral, pitch and voice-quality differences are speaker-specific. A frame-aligned network cannot change timing. So, inside HDNZF-Net:
+- **GMM (identification):** typical-vs-atypical scoring and degree, from the timing features plus frame features. Its score also sets the correction strength.
+- **ZF-Net (identification and reconstruction):** frame-level localisation of atypical events (abnormal pauses, slowed stretches) and residual spectral clean-up for speakers who need it.
+- **DNN:** fuses the GMM and ZF-Net outputs and predicts the correction parameters (pause shortening, rate change).
+- **DSP temporal module:** executes the timing edits.
+
+Each component's contribution is shown by ablation under leave-one-speaker-out evaluation, and the detector results are reported as preliminary (7 real speakers). Vaani source clips are **not** pre-cleaned with the v1 model, to avoid baking in artefacts; noisy clips are rejected by a quality filter instead.
+
+**Synthetic source (2026-11-22):** regular Vaani Telugu, spontaneous speech.
+- **Speaker overlap:** speakers in `typical_controls_v2` and `vaani_telugu_transcribed` are excluded.
+- **Selection:** at most 20 clips per speaker, 2–30 s, gender-balanced, transcripts not required (transcribed clips are flagged), about 30% oversampling for the quality filter.
+- **Split:** by speaker, 80/10/10.
+- **Pilot:** about 60 speakers, about 1,000 clips that pass the filter, in `synth_source_v1_pilot/`.
+- **Full run (after the pilot is reviewed):** about 300 speakers, about 6,000 clips, about 10 h.
 
 **Technical decisions (2026-11-22):**
 - **VAD:** an adaptive energy VAD (frames more than 35 dB below the 95th percentile, or within 6 dB of the floor, count as non-speech). It is deterministic and needs no download. It is less robust in noisy recordings, so a neural VAD (Silero) is a possible later upgrade.

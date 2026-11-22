@@ -207,7 +207,8 @@ def to_mono_16k(audio: np.ndarray, sample_rate: int) -> np.ndarray:
     return np.clip(mono, -1.0, 1.0).astype(np.float32)
 
 
-def fetch_selected(fs, selected: pd.DataFrame, output_dir: Path, *, source_revision: str | None, audio_column: str = "audio") -> pd.DataFrame:
+def fetch_selected(fs, selected: pd.DataFrame, output_dir: Path, *, source_revision: str | None, audio_column: str = "audio",
+                   id_prefix: str = "ctl") -> pd.DataFrame:
     """Download only the needed audio, write 16 kHz mono PCM16 WAVs, return the manifest."""
     import pyarrow.parquet as pq
     import soundfile as sf
@@ -231,7 +232,7 @@ def fetch_selected(fs, selected: pd.DataFrame, output_dir: Path, *, source_revis
                     entry.update({"status": "duplicate_skipped", "duplicate_of": seen_hashes[digest]})
                     records.append(entry)
                     continue
-                control_id = f"ctl_{len(seen_hashes):04d}"
+                control_id = f"{id_prefix}_{len(seen_hashes):04d}"
                 speaker_dir = audio_dir / str(row["speakerID"])
                 speaker_dir.mkdir(parents=True, exist_ok=True)
                 path = speaker_dir / f"{control_id}.wav"
