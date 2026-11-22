@@ -5,7 +5,7 @@ import RecordPanel from '../components/RecordPanel';
 import StatusAnnouncer from '../components/StatusAnnouncer';
 import { useProfile } from '../context/ProfileContext';
 import { useRecording } from '../context/RecordingContext';
-import { enhanceAudio } from '../enhance';
+import { enhanceAudio, isRealEngineConfigured } from '../enhance';
 import { MAX_RECORDING_SECONDS } from '../hooks/useRecorder';
 
 export default function HomePage() {
@@ -21,6 +21,7 @@ export default function HomePage() {
     dismissError,
   } = useRecording();
   const { settings } = useProfile();
+  const realEngine = isRealEngineConfigured();
 
   const [announcement, setAnnouncement] = useState('');
   const [demo, setDemo] = useState<DemoState>({ status: 'idle' });
@@ -64,7 +65,9 @@ export default function HomePage() {
 
     setDemo({ status: 'preparing' });
     setAnnouncement(
-      'Loading the demo sample. In demo mode, your recording is not processed.',
+      realEngine
+        ? 'Enhancing your recording. This can take a few seconds.'
+        : 'Loading the demo sample. In demo mode, your recording is not processed.',
     );
 
     try {
@@ -74,15 +77,29 @@ export default function HomePage() {
       });
       setDemo({ status: 'ready', result });
       setAnnouncement(
-        'Demo audio is ready. It is a sample clip, not your recording, and no enhancement has been applied.',
+        result.isDemo
+          ? 'Demo audio is ready. It is a sample clip, not your recording, and no enhancement has been applied.'
+          : 'Enhanced audio is ready. You can listen to it now.',
       );
-    } catch {
-      setDemo({
-        status: 'error',
-        message: 'The demo sample could not be loaded. Please try again.',
-      });
+    } catch (err) {
+      const message = realEngine
+        ? err instanceof Error && err.message
+          ? err.message
+          : 'Your recording could not be enhanced. Please try again.'
+        : 'The demo sample could not be loaded. Please try again.';
+      setDemo({ status: 'error', message });
     }
-  }, [recording]);
+  }, [realEngine, recording]);
+
+  // Release object URLs created for enhanced audio when they are replaced.
+  const enhancedUrl =
+    demo.status === 'ready' && !demo.result.isDemo ? demo.result.audioUrl : null;
+  useEffect(() => {
+    if (!enhancedUrl) {
+      return undefined;
+    }
+    return () => URL.revokeObjectURL(enhancedUrl);
+  }, [enhancedUrl]);
 
   const isBusy = status === 'requesting' || status === 'recording';
   const visibleRecording = isBusy ? null : recording;
@@ -96,7 +113,9 @@ export default function HomePage() {
           {displayName ? `Hello, ${displayName}` : 'Try Intelli-Speech'}
         </h1>
         <p className="page-lede">
-          Record a short sample, listen back, and try the enhancement demonstration.
+          {realEngine
+            ? 'Record a short sample, listen back, and try the research enhancement model.'
+            : 'Record a short sample, listen back, and try the enhancement demonstration.'}
         </p>
       </header>
 
@@ -114,7 +133,7 @@ export default function HomePage() {
         <PlaybackPanel recording={visibleRecording} onRecordAgain={handleStart} />
       )}
 
-      {visibleRecording && <EnhancePanel state={demo} onEnhance={handleEnhance} />}
+      {visibleRecording && <EnhancePanel state={demo} onEnhance={handleEnhance} realEngine={realEngine} />}
 
       <StatusAnnouncer message={announcement} />
     </div>

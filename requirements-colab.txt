@@ -7,3 +7,9 @@ pandas>=2.0
 soundfile>=0.12.1
 librosa==0.10.2.post1
 matplotlib>=3.7
+# v1 model (ZF-Net + GMM). torch is preinstalled in Colab; do not re-pin it here.
+scikit-learn>=1.3
+joblib>=1.3
+# Objective metrics for the evaluation table.
+pesq>=0.0.4
+pystoi>=0.4

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Evaluate non-oracle Wiener and oracle IRM baselines on paired speech data."""
+"""Evaluate Wiener, oracle IRM, and the ZF-Net + GMM model on paired speech data."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from intelli_speech.audio_io import load_audio
-from intelli_speech.baselines import oracle_irm_enhance, wiener_enhance
+from intelli_speech.baselines import BaselineResult, oracle_irm_enhance, wiener_enhance
 from intelli_speech.dataset import VALID_SPLITS, load_pairs
 from intelli_speech.evaluation import (
     MetricUnavailableError,
@@ -31,7 +31,7 @@ from intelli_speech.stft import STFTConfig, STFTDependencyError
 DEFAULT_DATASET_DIR = Path(
     "/content/drive/MyDrive/Intelli-Speech-data/paired_dataset_v3"
 )
-METHODS = ("wiener", "oracle-irm")
+METHODS = ("wiener", "oracle-irm", "zfnet-gmm")
 
 
 def positive_int(value: str) -> int:
@@ -66,7 +66,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--method",
         choices=METHODS,
         default="wiener",
-        help="Baseline method. oracle-irm uses the clean reference.",
+        help="Method. oracle-irm uses the clean reference; zfnet-gmm needs checkpoints.",
+    )
+    parser.add_argument(
+        "--gmm-checkpoint",
+        type=Path,
+        default=None,
+        help="zfnet-gmm only: gmm.joblib from scripts/train_gmm.py.",
+    )
+    parser.add_argument(
+        "--zfnet-checkpoint",
+        type=Path,
+        default=None,
+        help="zfnet-gmm only: zfnet.pt from scripts/train_zfnet.py.",
     )
     parser.add_argument(
         "--limit",
@@ -132,6 +144,8 @@ def evaluate(
     noise_duration_sec: float,
     include_pesq: bool,
     include_stoi: bool,
+    gmm_checkpoint: Path | None = None,
+    zfnet_checkpoint: Path | None = None,
 ) -> dict[str, Any]:
     """Run one baseline over one split and write metrics/config/summary files."""
     if method not in METHODS:
@@ -153,6 +167,13 @@ def evaluate(
         hop_length=hop_length,
         sample_rate=16000,
     )
+    enhancer = None
+    if method == "zfnet-gmm":
+        if gmm_checkpoint is None or zfnet_checkpoint is None:
+            raise ValueError("zfnet-gmm requires --gmm-checkpoint and --zfnet-checkpoint.")
+        from intelli_speech.enhancer import Enhancer
+
+        enhancer = Enhancer.from_checkpoints(gmm_checkpoint, zfnet_checkpoint)
     destination = prepare_output_dir(destination_path, overwrite=overwrite)
 
     rows: list[dict[str, Any]] = []
@@ -170,14 +191,25 @@ def evaluate(
                 f"{clean.shape} vs {noisy.shape}."
             )
 
+        predicted_noise = ""
         if method == "wiener":
             baseline = wiener_enhance(
                 noisy,
                 config,
                 noise_duration_sec=noise_duration_sec,
             )
-        else:
+        elif method == "oracle-irm":
             baseline = oracle_irm_enhance(clean, noisy, config)
+        else:
+            detailed = enhancer.enhance_detailed(noisy)
+            predicted_noise = detailed.output.noise_type
+            baseline = BaselineResult(
+                method="zfnet-gmm",
+                enhanced=detailed.output.waveform,
+                enhanced_stft=detailed.enhanced_stft,
+                mask_or_gain=detailed.mask,
+                uses_clean_reference=False,
+            )
 
         metrics = evaluate_enhancement(
             clean,
@@ -190,6 +222,7 @@ def evaluate(
             "split": pair.split,
             "target_snr_db": pair.target_snr_db,
             "noise_environment": pair.noise_environment or "",
+            "predicted_noise": predicted_noise,
             "method": baseline.method,
             "uses_clean_reference": baseline.uses_clean_reference,
             "noise_frames": baseline.noise_frames,
@@ -239,6 +272,12 @@ def evaluate(
     if include_stoi:
         metric_names.append("stoi")
     summary = summarize_metrics(rows, metric_names=metric_names)
+    if method == "zfnet-gmm":
+        labelled = [row for row in rows if row["noise_environment"]]
+        if labelled:
+            summary["noise_classification_accuracy"] = sum(
+                row["predicted_noise"] == row["noise_environment"] for row in labelled
+            ) / len(labelled)
 
     metrics_path = destination / "metrics.csv"
     with metrics_path.open("w", encoding="utf-8", newline="") as handle:
@@ -265,6 +304,9 @@ def evaluate(
         "wiener_noise_duration_sec": noise_duration_sec if method == "wiener" else None,
         "include_pesq": include_pesq,
         "include_stoi": include_stoi,
+        "gmm_checkpoint": str(gmm_checkpoint) if gmm_checkpoint else None,
+        "zfnet_checkpoint": str(zfnet_checkpoint) if zfnet_checkpoint else None,
+        "model_version": enhancer.model_version if enhancer else None,
     }
     (destination / "config.json").write_text(
         json.dumps(config_payload, indent=2),
@@ -313,6 +355,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             noise_duration_sec=args.noise_duration,
             include_pesq=args.include_pesq,
             include_stoi=args.include_stoi,
+            gmm_checkpoint=args.gmm_checkpoint,
+            zfnet_checkpoint=args.zfnet_checkpoint,
         )
     except (
         FileExistsError,
@@ -320,6 +364,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ValueError,
         STFTDependencyError,
         MetricUnavailableError,
+        RuntimeError,
     ) as exc:
         print(f"Baseline evaluation failed: {exc}", file=sys.stderr)
         return 1

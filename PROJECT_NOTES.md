@@ -9,6 +9,7 @@ task. Update it only with observed evidence.
 | File | Role | Writes |
 |---|---|---|
 | `RECOVERY.ipynb` | Runtime, Drive/repo, cache, Hugging Face, checkpoint, ClearerVoice recovery | cache directories only |
+| `TRAIN_V1.ipynb` | v1 runs: baselines, GMM, ZF-Net training, evaluation, results table | `experiments/` only |
 | `MAINFILE.ipynb` | Read-only workflow over existing Drive artifacts | none |
 | `docs/dataset_structure.md` | Dataset structure and audit record | — |
 | `docs/progress.md` | Dataset-generation progress narrative (moved from root) | — |
@@ -95,6 +96,24 @@ Run `RECOVERY.ipynb` first in a fresh Colab runtime, then `MAINFILE.ipynb`.
 - `npx tsc --noEmit -p tsconfig.app.json` in `app/` → **clean** (frontend is out of scope
   for the current research work).
 
+### 1.6 v1 model (ZF-Net + GMM) and app wiring — implemented, not yet trained on real data
+
+Decision (2026-11-22): the GMM's role is a **noise-type classifier**. Its 5-class
+posterior conditions the ZF-Net mask estimator through FiLM and is shown in the UI.
+
+- Code: `intelli_speech/{features,gmm_noise,zfnet,enhancer,experiment}.py`,
+  `scripts/train_gmm.py`, `scripts/train_zfnet.py`, `--method zfnet-gmm` in
+  `scripts/evaluate_baselines.py`, the FastAPI server in `server/`, and the frontend in
+  `app/src/enhance/` (16 kHz WAV upload when `VITE_ENHANCE_API_URL` is set; demo mode is
+  kept otherwise).
+- Local venv (torch 2.15.0+cpu, librosa 0.10.2.post1, NumPy 2.4.6, sklearn 1.9.1):
+  `pytest` → **108 passed**. `npm run build` passes with and without the API URL.
+- A synthetic 36-row smoke dataset ran end to end: train_gmm → train_zfnet (3 epochs) →
+  evaluate zfnet-gmm → `POST /enhance` returned audio plus a noise label. **These are smoke
+  numbers only, not research results.**
+- PESQ cannot be built on this Windows machine (no MSVC). Compute it in Colab.
+- Not yet done: training on `paired_dataset_v3` and the real metrics table.
+
 ## 2. Archive map and cleanup result
 
 The cleanup did **not** delete unique research content. It moved the working notebook out
@@ -145,18 +164,21 @@ revoked. Never re-commit these notebooks; keep `prev_files/` untracked.
 5. **First baseline run is still pending.** The metric and test-set script now exist and
    pass synthetic smoke tests, but no baseline table has been produced on the real
    `paired_dataset_v3` test split. This is the immediate P2 milestone.
-6. **Colab checkout is behind `main`.** The recorded `RECOVERY.ipynb` run reported
-   `HEAD: e1b05f9`; local `main` is at `7faec80`. The `intelli_speech/` package is not
-   present in that checkout. Pull before the next run.
+6. **Colab checkout is behind `main`, and `main` is not pushed.** The recorded
+   `RECOVERY.ipynb` run reported `HEAD: e1b05f9`. `origin/main` is at `7faec80`; local
+   `main` is ahead (from `18114b5` "Reorganize repo and add baseline research pipeline"
+   onward) and **not pushed**. A Colab `git pull` gets nothing new until local `main` is
+   pushed.
 7. **Active notebooks contain uncommitted outputs.** `MAINFILE.ipynb` and
    `RECOVERY.ipynb` have execution counts and outputs from a recorded run; the cell
    sources are unchanged vs HEAD. Review before committing.
 
 ## 4. Decisions
 
-1. **Two active notebooks only.** `RECOVERY.ipynb` owns environment and cache recovery;
-   `MAINFILE.ipynb` owns read-only artifact checks. Research logic belongs in
-   `intelli_speech/` and `scripts/`, not in notebooks.
+1. **Three active notebooks only.** `RECOVERY.ipynb` owns environment and cache recovery;
+   `MAINFILE.ipynb` owns read-only artifact checks; `TRAIN_V1.ipynb` (added 2026-11-22)
+   orchestrates the v1 baseline/GMM/ZF-Net runs and writes only to `experiments/`.
+   Research logic belongs in `intelli_speech/` and `scripts/`, not in notebooks.
 2. **`prev_files/` is an untracked archive.** Keep it git-ignored. Never import from it or
    use it as runtime input.
 3. **`MAINFILE.ipynb` stays read-only.** Scripts may write experiment outputs; the

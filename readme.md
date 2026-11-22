@@ -229,6 +229,37 @@ python scripts/run_frcrn.py \
 The FRCRN script processes one sample by default, refuses to write inside the dataset,
 and writes results to `Intelli-Speech-data/experiments/clearvoice_frcrn/`.
 
+### v1 model: STFT → GMM noise classifier + ZF-Net mask → iSTFT
+
+- `intelli_speech/features.py`: log-magnitude and log-mel + delta features.
+- `intelli_speech/gmm_noise.py`: one diagonal GMM per DEMAND noise class, with a
+  temperature-calibrated posterior.
+- `intelli_speech/zfnet.py`: a ZF-Net-style CNN mask estimator using the 7×7/5×5/3×3/3×3/3×3
+  encoder with frequency-only strides. The GMM posterior conditions it through FiLM, and it is
+  trained toward the IRM.
+- `intelli_speech/enhancer.py`: `Enhancer`, the inference entry point that the evaluator and
+  `server/` both use.
+
+```bash
+D=/content/drive/MyDrive/Intelli-Speech-data/paired_dataset_v3
+R=/content/drive/MyDrive/Intelli-Speech-data/experiments/zfnet_gmm_v1
+python scripts/train_gmm.py   --dataset-dir $D                 # -> $R/gmm.joblib, gmm_report.json
+python scripts/train_zfnet.py --dataset-dir $D --epochs 20     # -> $R/zfnet.pt, history.csv
+python scripts/evaluate_baselines.py --dataset-dir $D --split test --method zfnet-gmm \
+  --gmm-checkpoint $R/gmm.joblib --zfnet-checkpoint $R/zfnet.pt --include-pesq --include-stoi
+```
+
+Local inference server and frontend:
+
+```bash
+pip install -r server/requirements.txt
+INTELLI_SPEECH_GMM_PATH=checkpoints/gmm.joblib INTELLI_SPEECH_ZFNET_PATH=checkpoints/zfnet.pt \
+  python -m uvicorn server.app:app --host 127.0.0.1 --port 8000
+cd app && VITE_ENHANCE_API_URL=http://127.0.0.1:8000 npm run dev
+```
+
+If `VITE_ENHANCE_API_URL` is not set, the frontend keeps its clearly-labelled demo mode.
+
 ## Repository Layout
 
 The active repository is intentionally small:
