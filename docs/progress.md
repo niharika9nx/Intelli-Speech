@@ -1,5 +1,8 @@
 # Intelli-Speech — Project Progress
 
+> **Historical progress narrative** (moved from the repository root on 2026-11-22).
+> Current execution state, verified results, and blockers live in `PROJECT_NOTES.md`.
+
 **Last updated:** 2026-10-25  
 **Current milestone:** Paired Telugu speech dataset v3 generated and independently validated.
 

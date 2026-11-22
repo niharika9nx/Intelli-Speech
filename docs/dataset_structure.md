@@ -291,11 +291,16 @@ These artifacts preserve the recorded source mappings, split assignments, mixing
 
 ### Remaining
 
-- Commit this report to the project repository.
 - Define the speech-enhancement objective and evaluation protocol.
 - Select an appropriate baseline and objective metrics.
 - Finalize the model architecture only after the objective is specified.
 - Train and evaluate a baseline after the data and research protocol have been reviewed.
+
+### Status update (2026-11-22)
+
+This report now lives under `docs/`. The dataset remains in Drive and has not been
+regenerated. Baseline code and the first objective evaluation are being ported into
+`intelli_speech/` and `scripts/`; no model has been trained yet.
 
 **Current conclusion:** The v3 dataset has passed the implemented structural and numerical checks, and representative audio has passed the listening review. It is ready for the next stage of research planning, but model effectiveness has not yet been established.
 

@@ -7,6 +7,17 @@ name = "intelli-speech"
 version = "0.1.0"
 description = "Reusable utilities for the Intelli-Speech Telugu speech research prototype"
 requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "soundfile>=0.12",
+]
+
+[project.optional-dependencies]
+stft = ["librosa>=0.10.2,<0.11"]
+metrics = ["pesq>=0.4", "pystoi>=0.4"]
+dev = ["pytest>=7"]
 
 [tool.setuptools.packages.find]
 where = ["."]

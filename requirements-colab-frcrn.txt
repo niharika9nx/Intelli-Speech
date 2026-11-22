@@ -1,0 +1,11 @@
+# Separate FRCRN / ClearerVoice environment.
+# ClearerVoice 0.1.2 declares numpy<2.0, so this file must not be installed
+# into the baseline environment defined in requirements-colab.txt.
+clearvoice==0.1.2
+numpy<2.0,>=1.24.3
+librosa==0.10.2.post1
+opencv-python==4.10.0.84
+soundfile>=0.12.1
+torch>=2.0.1
+torchaudio>=2.0.0
+huggingface-hub>=0.26.2

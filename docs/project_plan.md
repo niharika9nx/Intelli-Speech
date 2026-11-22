@@ -1,5 +1,8 @@
 # Intelli-Speech — Project Plan
 
+> **Historical planning document** (moved from the repository root on 2026-11-22).
+> Current execution state, verified results, and blockers live in `PROJECT_NOTES.md`.
+
 ## 1. Project Objective
 
 Develop a speech-enhancement research pipeline for noisy Telugu speech, intended to support a voice-aid prototype.

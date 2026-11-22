@@ -1,10 +1,9 @@
-# Diagnostic/development dependencies. Do not install unless the runtime check
-# confirms that the selected Python version and wheels are compatible.
-clearvoice==0.1.2
-numpy<2.0,>=1.24.3
+# Baseline / STFT environment for Colab.
+# NumPy must stay <=2.4 for the current numba/librosa pair.
+# Do not install clearvoice into this environment; use the separate FRCRN file.
+numpy>=2.0,<2.5
+scipy>=1.10
+pandas>=2.0
+soundfile>=0.12.1
 librosa==0.10.2.post1
-opencv-python==4.10.0.84
-soundfile==0.12.1
-torch>=2.0.1
-torchaudio>=2.0.0
-huggingface-hub>=0.26.2
+matplotlib>=3.7

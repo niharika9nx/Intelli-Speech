@@ -6,7 +6,7 @@ Intelli-Speech is a research project focused on developing a speech-enhancement 
 
 The project explores deep-learning-based speech processing to improve speech clarity in noisy environments. The proposed research direction includes a ZF-Net-based neural network, with the potential integration of Gaussian Mixture Models (GMMs) and time-frequency signal processing.
 
-> **Project status:** Research and development. Dataset inspection, architecture validation, implementation, and experimental evaluation are ongoing.
+> **Project status:** Research and development. Dataset v3 is generated and audited; baseline evaluation and model implementation are ongoing.
 
 ## Objectives
 
@@ -75,7 +75,7 @@ The project uses a paired Telugu speech dataset (`paired_dataset_v3`) prepared f
 
 The dataset remains in Google Drive and is accessed from Colab after mounting the drive with the user's authorization.
 
-The dataset has not yet been used to train or evaluate a model. The enhancement objective, evaluation protocol, and model architecture are still being defined.
+The dataset has not yet been used to train or evaluate a model. Baseline code now exists, but no objective metrics have been recorded yet. The enhancement objective, evaluation protocol, and model architecture are still being defined.
 
 **Important:** The dataset uses controlled synthetic noise mixtures; performance on naturally noisy speech remains untested.
 
@@ -170,10 +170,26 @@ The repository now includes a small, notebook-independent Python foundation:
 - `intelli_speech/audio_io.py` resolves metadata-relative paths, loads and writes
   validated mono audio, and rejects empty, non-finite, or unexpected-format samples.
 - `intelli_speech/metrics.py` provides SNR, RMS, peak, and clipping calculations.
-- `scripts/setup_colab_runtime.py` reports the runtime and ClearerVoice dependency
-  state without installing or downgrading packages.
-- `requirements-colab.txt` records the currently considered Colab dependency set.
-  It is a reference manifest, not a license for an automatic downgrade.
+- `intelli_speech/dataset.py` loads and validates `metadata.csv`, filters splits, and
+  yields resolved clean/noisy pairs without modifying the dataset.
+- `intelli_speech/preprocessing.py` provides mono/16 kHz conversion, optional silence
+  trimming, noise-segment selection, and SNR-controlled mixing.
+- `intelli_speech/stft.py` defines the STFT/iSTFT configuration and checkpoint loader.
+- `intelli_speech/baselines.py` implements the oracle IRM and non-oracle Wiener-style
+  baselines. The oracle method uses the clean reference and is not deployable.
+- `intelli_speech/evaluation.py` computes error-to-reference SNR, SNR improvement, and
+  optional PESQ/STOI metrics when those packages are installed.
+- `intelli_speech/frcrn.py` is a guarded ClearerVoice/FRCRN adapter; it does not import
+  ClearerVoice at module import time and reports a clear dependency error when absent.
+- `scripts/evaluate_baselines.py` runs a baseline over one split and writes
+  `metrics.csv`, `config.json`, and `summary.json` under an experiment directory.
+- `scripts/run_frcrn.py` runs the guarded FRCRN adapter on a bounded number of pairs and
+  writes enhanced WAVs plus metrics under `experiments/clearvoice_frcrn/`.
+- `scripts/setup_colab_runtime.py` reports the runtime and dependency state without
+  installing or downgrading packages.
+- `requirements-colab.txt` is the baseline/STFT environment (NumPy `<2.5`).
+- `requirements-colab-frcrn.txt` is the separate ClearerVoice/FRCRN environment
+  (NumPy `<2.0`). Do not install both files into one environment.
 
 Run focused utility tests from the repository root:
 
@@ -186,6 +202,49 @@ Run local runtime diagnostics:
 ```bash
 python scripts/setup_colab_runtime.py
 ```
+
+Run the first baseline on the test split after mounting Drive:
+
+```bash
+python scripts/evaluate_baselines.py \
+  --dataset-dir /content/drive/MyDrive/Intelli-Speech-data/paired_dataset_v3 \
+  --split test \
+  --method wiener
+```
+
+Use `--method oracle-irm` only for the reference upper-bound experiment; it uses the
+clean target to construct the mask and must not be reported as a deployable method.
+Outputs default to `Intelli-Speech-data/experiments/<method>_<split>/` and never modify
+the dataset.
+
+Run FRCRN only in the separate ClearerVoice environment after a checkpoint is available:
+
+```bash
+python scripts/run_frcrn.py \
+  --dataset-dir /content/drive/MyDrive/Intelli-Speech-data/paired_dataset_v3 \
+  --split test \
+  --limit 1
+```
+
+The FRCRN script processes one sample by default, refuses to write inside the dataset,
+and writes results to `Intelli-Speech-data/experiments/clearvoice_frcrn/`.
+
+## Repository Layout
+
+The active repository is intentionally small:
+
+- `intelli_speech/` — reusable Python modules for dataset loading, preprocessing, STFT,
+  baselines, evaluation, and the guarded FRCRN adapter.
+- `scripts/` — runnable entry points for dataset inspection, runtime diagnostics, baseline
+  evaluation, and FRCRN inference.
+- `tests/` — focused tests using synthetic arrays and temporary files; no Drive access.
+- `docs/` — dataset report, historical progress, and historical project plan.
+- `app/` — the clearly labelled frontend demonstration (not the enhancement model).
+- `MAINFILE.ipynb` and `RECOVERY.ipynb` — orchestration and runtime recovery only.
+- `prev_files/` — git-ignored archive of pre-cleanup notebooks; never imported by code.
+
+Experiment outputs, checkpoints, audio artifacts, and `analysis_cache/` are ignored and
+should live in Google Drive or another persistent location.
 
 ## Research Workflow
 
@@ -224,11 +283,12 @@ No performance claims are made until experiments have been conducted and results
 
 ## Current Priorities
 
-- [ ] Inspect and document the existing Telugu dataset.
-- [ ] Verify audio metadata and transcript mappings.
-- [ ] Determine whether suitable clean/noisy training pairs are available or how appropriate training targets could be obtained.
+- [x] Inspect and document the existing Telugu dataset.
+- [x] Verify audio metadata and transcript mappings.
+- [x] Build and audit paired clean/noisy dataset v3.
 - [ ] Review relevant speech-enhancement research and validate the proposed architecture.
-- [ ] Establish baseline experiments and evaluation criteria.
+- [ ] Establish baseline experiments and evaluation criteria. **In progress:** Wiener
+  and oracle IRM code exists; the first metrics table is pending a working Colab runtime.
 - [ ] Implement and evaluate the selected model.
 - [ ] Explore integration into a voice-aid software prototype.
 

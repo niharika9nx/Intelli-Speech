@@ -3,3 +3,8 @@ __pycache__/
 *.pyc
 .pytest_cache/
 prev_files/
+experiments/
+analysis_cache/
+checkpoints/
+*.npz
+*.wav

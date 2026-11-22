@@ -85,17 +85,30 @@ def main() -> int:
     print(f"Python: {platform.python_version()} ({sys.executable})")
     print(f"Platform: {platform.platform()}")
     print(f"NumPy: {package_version('numpy')}")
+    print(f"Numba: {package_version('numba')}")
+    print(f"librosa: {package_version('librosa')}")
     print(f"PyTorch: {package_version('torch')}")
     print(f"torchaudio: {package_version('torchaudio')}")
     print(f"ClearerVoice: {package_version('clearvoice')}")
 
     numpy_version = package_version("numpy")
     if numpy_version != "not installed":
-        major = numpy_version.split(".", 1)[0]
-        if major.isdigit() and int(major) >= 2:
+        parts = numpy_version.split(".")
+        try:
+            major = int(parts[0])
+            minor = int(parts[1])
+        except (IndexError, ValueError):
+            major = 0
+            minor = 0
+        if major >= 2:
             print(
                 "Compatibility warning: ClearerVoice 0.1.2 declares NumPy "
                 "<2.0; package compatibility is not yet established."
+            )
+        if major > 2 or (major == 2 and minor >= 5):
+            print(
+                "Compatibility warning: the current numba/librosa pair "
+                "supports NumPy <=2.4; librosa STFT will fail on this runtime."
             )
 
     try:
@@ -106,6 +119,7 @@ def main() -> int:
         print("CUDA available: unknown (torch not installed)")
 
     print_package_compatibility("clearvoice")
+    print_package_compatibility("librosa")
     print_package_compatibility("numpy")
 
     in_colab = importlib.util.find_spec("google.colab") is not None
