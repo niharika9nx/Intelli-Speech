@@ -83,6 +83,25 @@ Each component's contribution is shown by ablation under leave-one-speaker-out e
   - The notebook's cell-5 syntax error is fixed.
 - **Run 2** writes to `synth_source_v1_pilot_r2/`.
 
+**Synthetic-source pilot, run 2 (2026-11-22, `synth_source_v1_pilot_r2/`):**
+- **Scan:** 30 shards in runs of 3. 36,323 of 49,297 rows (74 %) have no speaker ID and are excluded, since disjoint speakers cannot be guaranteed without one.
+- **Identified speakers:** 841, with a median of 3 clips each (max 8) in the scanned shards. 127 speakers with ≥ 5 clips → 666 clips selected (72 with transcripts), 84 M / 43 F, 6 districts.
+- **Quality:** 417 / 666 pass (63 %). Rejections: low SNR 135, narrow bandwidth 95, clipping 28, little speech 10, low activity 1.
+- **Usable** (≥ 3 passing clips per speaker): **375 clips, 87 speakers, 29.6 min**. Split by speaker: train 69 / val 9 / test 9 speakers (290 / 41 / 44 clips). 41 usable clips have transcripts.
+- **Metric quantiles (10/25/50/75/90 %):**
+  - SNR estimate: 9.0 / 13.2 / 19.0 / 28.0 / 37.6 dB
+  - Bandwidth: 1.06 / 1.44 / 2.18 / 3.39 / 4.77 kHz
+  - Activity ratio: 0.77 / 0.83 / 0.88 / 0.92 / 0.96
+
+  The thresholds (12 dB, 1.2 kHz) are kept.
+- **Decision (user-approved) for the full run:**
+  - 240 shards, spread evenly.
+  - ≥ 3 clips per speaker selected; ≥ 2 passing clips per speaker kept.
+  - At most 7,000 clips selected.
+  - Expected: ~4,000 usable clips, ~1,000 speakers, ~5 h (the target is reduced from 10 h because of the per-speaker clip scarcity).
+  - Transfer cap: 25 GB (network). Output: `synth_source_v1_full/`.
+- **Known imbalance:** men outnumber women 2 : 1, to be handled by speaker-balanced sampling in training.
+
 **Technical decisions (2026-11-22):**
 - **VAD:** an adaptive energy VAD (frames more than 35 dB below the 95th percentile, or within 6 dB of the floor, count as non-speech). It is deterministic and needs no download. It is less robust in noisy recordings, so a neural VAD (Silero) is a possible later upgrade.
 - **Speaking rate without transcripts:** acoustic syllable nuclei, de Jong & Wempe style (voiced intensity peaks with a dip of at least 2 dB). Articulation rate = nuclei / (active time − pauses ≥ 250 ms). The transcript-based akshara rate stays blocked until A2 resolves which script each field uses.

@@ -54,7 +54,10 @@ PRESETS = {
     # Clip target + ~30 % oversampling for the quality filter. n_speakers is a ceiling:
     # Vaani speakers contribute few clips per scanned shard, so the clip total binds first.
     "pilot": {"n_speakers": 200, "max_per_speaker": 20, "max_total": 1300, "min_per_speaker": 5, "max_shards": 30, "shard_block": 3},
-    "full": {"n_speakers": 1000, "max_per_speaker": 20, "max_total": 8600, "min_per_speaker": 5, "max_shards": 120, "shard_block": 3},
+    # Full (decided after pilot run 2: ~3 clips per identified speaker per scanned shard,
+    # ~56 % of selected clips usable): many speakers, few clips each, shards spread for
+    # district diversity. Expected ~4,000 usable clips, ~1,000 speakers, ~5 h.
+    "full": {"n_speakers": 2500, "max_per_speaker": 20, "max_total": 7000, "min_per_speaker": 3, "max_shards": 240, "shard_block": 1},
 }
 PROTECTED = ("vaani_telugu_transcribed", "paired_dataset_v3", "typical_controls_v2", "openslr_slr66")
 

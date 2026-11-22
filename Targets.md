@@ -43,8 +43,8 @@
 Each part's contribution will be proven by ablation.
 
 1. **Source speech: regular Vaani (decided).**
-   - Pilot: about 60 speakers and about 1,000 clips, in progress.
-   - Full run: about 300 speakers, about 6,000 clips, about 10 h.
+   - Pilot (done): 375 usable clips from 87 speakers, 29.6 min.
+   - Full run: about 4,000 clips from about 1,000 speakers, about 5 h. Vaani speakers have only a few clips each, so the target was set by number of speakers rather than hours.
    - No overlap with the comparison speakers, a quality filter, and a train/validation/test split by speaker.
 2. **Timing-change module:** slow the speech without changing pitch, and add and lengthen pauses. The settings are taken from the measured patterns, separately for each held-out speaker. Work on this has started, using test signals only.
 3. **Pitch changes:** varied at random for each synthetic speaker, since there is no shared pitch pattern.
