@@ -18,10 +18,10 @@ task. Update it only with observed evidence.
 |---|---|---|
 | **1 Dataset readiness** | | |
 | Exp 0 audit (`scripts/audit_v2.py`, `AUDIT_V2.ipynb`) | **run** 2026-11-22 | Drive `analysis_v2/audit_2026-11-22/` |
-| Exp 0b follow-up (clipping, transcription scripts, difficulty) | implemented, tested; **not run** | `scripts/audit_v2_followup.py`, `AUDIT_V2_FOLLOWUP.ipynb` cells 1–5 |
-| Balanced typical controls (≤40 spk × ≤10 clips, ≤400) | implemented, tested; **not run** | `scripts/build_typical_controls.py`, cells 6–8 → Drive `typical_controls_v2/` |
+| Exp 0b follow-up (clipping, transcription scripts, difficulty) | **run** 2026-11-22 | Drive `analysis_v2/audit_followup_2026-11-22/` |
+| Balanced typical controls (≤40 spk × ≤10 clips, ≤400) | **run** 2026-11-22: 40 spk (20 F / 20 M), 126 clips, 12.4 min | Drive `typical_controls_v2/` (manifest + provenance, rev `9e6ed4f`) |
 | Speaker-independent folds | not started | — |
-| **2 Characterization (Exp 1–2)** | implemented, tested; **not run** | features: `intelli_speech/acoustic_features.py` (`exp1-features-0.1`); `scripts/extract_features_exp1.py`; `scripts/analyze_exp1.py` (speaker-level catalogue); `EXP1_CHARACTERIZATION.ipynb` |
+| **2 Characterization (Exp 1–2)** | **run** 2026-11-22 (400 recordings, 0 errors): 17 candidate_class1 (all temporal + energy-modulation rate), 17 speaker_specific, 14 not_supported, 2 channel_confounded; robustness check (`scripts/exp1_robustness.py`, cell 6) implemented, tested, **not run** | features: `intelli_speech/acoustic_features.py` (`exp1-features-0.1`); `scripts/extract_features_exp1.py`; `scripts/analyze_exp1.py` (speaker-level catalogue); `EXP1_CHARACTERIZATION.ipynb` |
 | **3 Synthetic + models** | not started | — |
 | **4 Integration + evaluation** | not started | — |
 | **5 Prototype + delivery** | v1 app plumbing only (noise model) | `server/`, `app/` |
@@ -38,6 +38,12 @@ task. Update it only with observed evidence.
 - **SLR66:** 4,448 recordings, 47 speaker IDs derived from filenames, 48 kHz, read speech.
 - **Regular Vaani (HF card):** `ARTPARK-IISc/Vaani`, gated, CC-BY-4.0, parquet, Telugu ≈ 2,326 h (≈184 h transcribed), image-prompted spontaneous speech, sample rate not stated.
 
+**Exp 0b follow-up facts (2026-11-22, real data):**
+- **A1 full scale:** atypical 172/189 consistent with peak normalisation, 17 flagged clipping evidence (S4 8/9, S1 4, S7 3, S5 2); max run of near-full-scale samples 5, near-full-scale fraction ≤ 1e-4 → clipping is sparse. Typical copy: 155/246 below full scale, 91 peak-normalised, none clipped. → Level (RMS/peak) differs by *processing*, so level features are channel descriptors only; voice-quality features get a sensitivity check excluding flagged files.
+- **A2 scripts:** intended transcriptions are Telugu script (189/189; 3 stray Kannada signs). Verbatim transcriptions are mixed: 106 Telugu-dominant, 83 Latin-dominant (romanised), with annotation tags (`<>`, `{}`, `[]`). Typical copy: 197 Telugu / 49 Latin, same tags. → The verbatim-vs-intended CER (mean 1.13) mostly measures script/markup mismatch and is **not** an intelligibility measure; transcript-based akshara rates are not usable for verbatim text. Speaking rate stays acoustic.
+- **A3 difficulty:** card says only "from QC understandability rating"; reviewers are "not specialists in atypical speech"; intended text is written by people familiar with the speaker. Direction remains **UNKNOWN**. The only within-speaker association (Medium < Low on CER, p = 0.012, 5 speakers) is confounded by script mixing. → difficulty_level is a descriptive covariate only, never a severity label or target.
+- **Controls v2:** 30/872 shards scanned; 3,334 transcribed rows, 47 eligible speakers, 40 selected; 3–5 clips per speaker (cap 10 not reached: few transcribed clips per speaker); 16 kHz native, 0 decode errors, 0 duplicates. Districts are skewed (Manyam 14, Krishna 7 speakers). Control clips are short (~6 s) vs atypical (~35 s) → features are rate/proportion based; duration is reported but excluded.
+
 **Technical decisions (2026-11-22):**
 - **VAD:** an adaptive energy VAD (frames more than 35 dB below the 95th percentile, or within 6 dB of the floor, count as non-speech). It is deterministic and needs no download. It is less robust in noisy recordings, so a neural VAD (Silero) is a possible later upgrade.
 - **Speaking rate without transcripts:** acoustic syllable nuclei, de Jong & Wempe style (voiced intensity peaks with a dip of at least 2 dB). Articulation rate = nuclei / (active time − pauses ≥ 250 ms). The transcript-based akshara rate stays blocked until A2 resolves which script each field uses.
@@ -53,8 +59,8 @@ task. Update it only with observed evidence.
 - **opencode:** the deepseek, nemotron-super and mimo free models hit their usage limits on 2026-11-22. Only `nemotron-3.5-lightning-free` is both available and listed in `opencode.json`. It was used for one code review: 9 of 11 findings were false positives, and one robustness fix was applied.
 
 **Open blockers:**
-1. The v2 follow-up code is not on GitHub. The Colab checkout lacks it, so `AUDIT_V2_FOLLOWUP.ipynb` cell 2 fails. Pushing needs the user's approval.
-2. Access conditions for `ARTPARK-IISc/Vaani` must be accepted with the user's account.
+1. (resolved) Follow-up code pushed in `1563dae`; Vaani access accepted; follow-up run.
+2. Optional: controls with more clips per speaker would need un-transcribed rows (transcripts are not used by Exp 1); not needed for speaker-level medians.
 3. Notebooks with run outputs (`AUDIT_V2*.ipynb`, and the `TRAIN_V1`, `MAINFILE` and `RECOVERY` output changes) must not be committed with outputs: they contain research-only contributor IDs.
 
 ## Notebook and archive map
