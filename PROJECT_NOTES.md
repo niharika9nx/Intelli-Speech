@@ -4,6 +4,59 @@
 **Purpose:** Single source of truth for verified state, blockers, decisions, and the next
 task. Update it only with observed evidence.
 
+## 0. v2 master progress tracker (atypical Telugu speech)
+
+**Research direction:** see `project_brief_spt.md`.
+- Telugu-only Vaani Atypical corpus.
+- Evidence-based synthetic data.
+- Modular pipeline: a DSP temporal module, a prosody module, and HDNZF-Net (GMM + ZF-Net + DNN) as the frame-aligned spectral-clarity core. ASR→TTS is a comparison only.
+- Environmental-noise suppression (v1) stays a separate model.
+- Leave-one-speaker-out throughout, with transform parameters fitted per fold.
+- Status labels: **implemented** (code exists), **tested** (synthetic unit tests), **run** (executed on real data), **validated** (scientifically evaluated).
+
+| Phase / item | Status | Evidence / location |
+|---|---|---|
+| **1 Dataset readiness** | | |
+| Exp 0 audit (`scripts/audit_v2.py`, `AUDIT_V2.ipynb`) | **run** 2026-11-22 | Drive `analysis_v2/audit_2026-11-22/` |
+| Exp 0b follow-up (clipping, transcription scripts, difficulty) | implemented, tested; **not run** | `scripts/audit_v2_followup.py`, `AUDIT_V2_FOLLOWUP.ipynb` cells 1–5 |
+| Balanced typical controls (≤40 spk × ≤10 clips, ≤400) | implemented, tested; **not run** | `scripts/build_typical_controls.py`, cells 6–8 → Drive `typical_controls_v2/` |
+| Speaker-independent folds | not started | — |
+| **2 Characterization (Exp 1–2)** | implemented, tested; **not run** | features: `intelli_speech/acoustic_features.py` (`exp1-features-0.1`); `scripts/extract_features_exp1.py`; `scripts/analyze_exp1.py` (speaker-level catalogue); `EXP1_CHARACTERIZATION.ipynb` |
+| **3 Synthetic + models** | not started | — |
+| **4 Integration + evaluation** | not started | — |
+| **5 Prototype + delivery** | v1 app plumbing only (noise model) | `server/`, `app/` |
+
+**Exp 0 verified facts (2026-11-22, real data):**
+- **Atypical Telugu:** 189 clips, 7 speakers, 109.05 min, 16 kHz mono, 0 decode errors, 0 duplicates.
+  - Clips per speaker: 45 / 45 / 40 / 40 / 9 / 5 / 5.
+  - All 189 files reach ≥0.999 of full scale (whether this is clipping or normalisation is unresolved).
+  - Effective bandwidth per speaker is 1.2–5.0 kHz, which points to channel differences between speakers.
+  - Difficulty level: Low 55 / Medium 133 / High 1. Cramér's V with speaker = 0.51. **Scale direction unknown**: the card only says "from QC understandability rating".
+  - The CER between verbatim and intended transcriptions averages 1.13, so the two fields' semantics and scripts are unresolved.
+  - All 189 prompts are distinct; none is shared between speakers.
+- **Typical Vaani Drive copy:** 246 clips, 41 speakers, 25.9 min. Median 1 clip per speaker; one speaker has 161. No prompt column.
+- **SLR66:** 4,448 recordings, 47 speaker IDs derived from filenames, 48 kHz, read speech.
+- **Regular Vaani (HF card):** `ARTPARK-IISc/Vaani`, gated, CC-BY-4.0, parquet, Telugu ≈ 2,326 h (≈184 h transcribed), image-prompted spontaneous speech, sample rate not stated.
+
+**Technical decisions (2026-11-22):**
+- **VAD:** an adaptive energy VAD (frames more than 35 dB below the 95th percentile, or within 6 dB of the floor, count as non-speech). It is deterministic and needs no download. It is less robust in noisy recordings, so a neural VAD (Silero) is a possible later upgrade.
+- **Speaking rate without transcripts:** acoustic syllable nuclei, de Jong & Wempe style (voiced intensity peaks with a dip of at least 2 dB). Articulation rate = nuclei / (active time − pauses ≥ 250 ms). The transcript-based akshara rate stays blocked until A2 resolves which script each field uses.
+- **F0:** two passes. A first pass at 60–600 Hz, then a second pass bounded by 0.75 × the 15th percentile and 1.5 × the 85th percentile. Variability is reported in semitones relative to the recording's median.
+- **CPPS:** Praat with 10 ms frames and a straight-trend "Robust" fit. It is about 100× faster than the "Robust slow" default (223 s → 0.3 s per 10 s clip) and within about 0.3 dB on test signals.
+- **Spectral features:** band-limited to 80–4000 Hz, with per-recording MFCC mean removal. A feature is flagged `channel_confounded` when |Spearman ρ| ≥ 0.5 with bandwidth or RMS.
+- **Catalogue criterion (class 1):** all of the following:
+  - at least 5 of 7 speakers outside the control 10th–90th percentile range, in the same direction;
+  - the sign holds when each atypical speaker is left out;
+  - Benjamini–Hochberg q < 0.10;
+  - |Cliff's δ| ≥ 0.474;
+  - not channel-confounded.
+- **opencode:** the deepseek, nemotron-super and mimo free models hit their usage limits on 2026-11-22. Only `nemotron-3.5-lightning-free` is both available and listed in `opencode.json`. It was used for one code review: 9 of 11 findings were false positives, and one robustness fix was applied.
+
+**Open blockers:**
+1. The v2 follow-up code is not on GitHub. The Colab checkout lacks it, so `AUDIT_V2_FOLLOWUP.ipynb` cell 2 fails. Pushing needs the user's approval.
+2. Access conditions for `ARTPARK-IISc/Vaani` must be accepted with the user's account.
+3. Notebooks with run outputs (`AUDIT_V2*.ipynb`, and the `TRAIN_V1`, `MAINFILE` and `RECOVERY` output changes) must not be committed with outputs: they contain research-only contributor IDs.
+
 ## Notebook and archive map
 
 | File | Role | Writes |

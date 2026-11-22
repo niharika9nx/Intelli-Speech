@@ -96,6 +96,19 @@ Use specialists only for disjoint, bounded work:
 
 Do not delegate a continuous trace across multiple interconnected files to several agents. Follow the trace directly or assign one lead agent.
 
+### Model assignment (free tier only)
+
+`opencode.json` assigns per role (verified with `opencode models`, 2026-11-22): `plan`/`build` → `longcat-2.5-free`; `test-author`/`runtime-researcher` → `flint-40b-free`; `repository-explorer`/`documentation-editor` → `nemotron-3.5-lightning-free`; `code-reviewer` → `tidepool-alpha-free`. If a model hits its free limit, switch the role to another free model listed by `opencode models`. No paid providers; OpenRouter is not configured.
+
+### Codex CLI (second-opinion worker)
+
+Codex (ChatGPT sign-in, limited free quota) is used sparingly for high-value read-only work: reviewing statistics/feature code, independent re-checks, and drafting tests.
+
+- Default: `codex exec --sandbox read-only "<scoped task>"`.
+- Edits only in a separate Git worktree; the lead agent reviews and merges.
+- Same data rules as OpenCode: no transcripts, speaker IDs, audio, HF tokens, or `.env` contents in prompts — code and synthetic fixtures only.
+- Codex never commits or pushes.
+
 ## Parallel Sessions
 
 For independent subtasks:
