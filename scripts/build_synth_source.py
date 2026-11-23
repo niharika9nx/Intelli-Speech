@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -76,6 +77,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-bandwidth-hz", type=float, default=defaults.min_bandwidth_hz)
     parser.add_argument("--min-speech-time-s", type=float, default=defaults.min_speech_time_s)
     parser.add_argument("--min-activity-ratio", type=float, default=defaults.min_activity_ratio)
+    parser.add_argument("--workers", type=int, default=8, help="Parallel shard reads in the plan phase.")
+    parser.add_argument("--progress-every", type=int, default=10)
     parser.add_argument("--overwrite-plan", action="store_true")
     parser.add_argument("--overwrite-quality", action="store_true", help="Quality outputs are derived; audio is never touched.")
     return parser
@@ -138,7 +141,20 @@ def plan_phase(args, fs, output: Path, data_root: Path) -> dict[str, Any]:
     if not shards_all:
         raise FileNotFoundError("No Telugu parquet shards found; check access conditions and repo layout.")
     shards = block_subset(shards_all, settings["max_shards"], settings["shard_block"])
-    metadata = scan_metadata(fs, shards)
+    started = time.time()
+
+    def progress(done: int, total: int, shard: str, ok: bool) -> None:
+        if done == total or done % max(1, args.progress_every) == 0 or not ok:
+            rate = (time.time() - started) / max(1, done)
+            print(f"[plan] {done}/{total} shards ({time.time() - started:.0f}s, ~{rate * (total - done) / 60:.0f} min left)"
+                  + ("" if ok else f"  FAILED {Path(shard).name}"), flush=True)
+
+    failed: dict[str, str] = {}
+    metadata = scan_metadata(fs, shards, cache_dir=output / "metadata_cache", workers=args.workers,
+                             progress=progress, failed=failed)
+    print(f"[plan] scan finished: {len(metadata)} rows, {len(failed)} failed shards; selecting + sizing download...", flush=True)
+    if len(failed) > 0.1 * len(shards):
+        raise RuntimeError(f"{len(failed)} of {len(shards)} shards failed to scan; rerun to resume (finished shards are cached).")
     ids = metadata["speakerID"].astype(str).str.strip()
     removed = int(ids.isin(excluded).sum())
     metadata = metadata[~ids.isin(excluded)]
@@ -153,9 +169,10 @@ def plan_phase(args, fs, output: Path, data_root: Path) -> dict[str, Any]:
         "created_utc": utc_now(), "set": args.set_name, "settings": settings,
         "source_repo": VAANI_REPO, "source_revision": source_revision(),
         "telugu_shards_total": len(shards_all), "shards_scanned": len(shards),
+        "shards_failed": len(failed), "scan_seconds": round(time.time() - started, 1),
         "exclusions": exclusion_report, "rows_removed_by_exclusion": removed,
         "selected_with_transcript": int(selected["has_transcript"].sum()),
-        "estimated_audio_bytes": estimate_audio_bytes(fs, selected) if len(selected) else 0,
+        "estimated_audio_bytes": estimate_audio_bytes(fs, selected, workers=args.workers) if len(selected) else 0,
         **report,
     }
     write_json(output / "plan.json", plan)

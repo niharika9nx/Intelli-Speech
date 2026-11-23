@@ -165,3 +165,68 @@ def test_block_subset_takes_consecutive_runs() -> None:
     assert len(chosen) == 9 and idx[:3] == [0, 1, 2] and idx[-1] == 99
     assert all(idx[i + 1] - idx[i] == 1 for i in (0, 1, 3, 4, 6, 7))
     assert block_subset(items, None, 3) == items
+
+
+def test_scan_metadata_parallel_cache_resume_and_failures(tmp_path: Path) -> None:
+    _write_shards(tmp_path, n_shards=3)
+    fs = PrefixFS(tmp_path)
+    shards = list_telugu_shards(fs)
+    serial = scan_metadata(fs, shards)
+    calls: list[tuple[int, int, bool]] = []
+    cache = tmp_path / "cache"
+    parallel = scan_metadata(fs, shards, cache_dir=cache, workers=3, progress=lambda d, t, s, ok: calls.append((d, t, ok)))
+    pd.testing.assert_frame_equal(serial, parallel)  # same rows, shard order preserved
+    assert len(list(cache.glob("*.parquet"))) == 3 and calls[-1] == (3, 3, True)
+
+    class Broken(PrefixFS):
+        def open(self, path, mode="rb", **kwargs):
+            raise OSError("network down")
+
+    resumed = scan_metadata(Broken(tmp_path), shards, cache_dir=cache)  # all cached: no reads needed
+    pd.testing.assert_frame_equal(serial, resumed)
+    failed: dict[str, str] = {}
+    partial = scan_metadata(Broken(tmp_path), shards, retries=0, failed=failed)
+    assert len(partial) == 0 and set(failed) == set(shards) and "network down" in next(iter(failed.values()))
+
+
+class FlakyFS(PrefixFS):
+    """Counts opens; the named shard fails ``fail_times`` times before succeeding."""
+
+    def __init__(self, root: Path, fail_shard: str | None = None, fail_times: int = 0):
+        super().__init__(root)
+        self.opens: list[str] = []
+        self.fail_shard, self.fail_times = fail_shard, fail_times
+
+    def open(self, path, mode="rb", **kwargs):
+        self.opens.append(str(path))
+        if self.fail_shard and str(path).endswith(self.fail_shard) and self.fail_times > 0:
+            self.fail_times -= 1
+            raise OSError("simulated network error")
+        return super().open(path, mode, **kwargs)
+
+
+def test_scan_parallel_matches_sequential_and_resumes_from_cache(tmp_path: Path) -> None:
+    _write_shards(tmp_path, n_shards=4)
+    fs = FlakyFS(tmp_path)
+    shards = list_telugu_shards(fs)
+    sequential = scan_metadata(fs, shards)
+    calls = []
+    cache = tmp_path / "cache"
+    parallel = scan_metadata(fs, shards, cache_dir=cache, workers=3, progress=lambda d, t, s, ok: calls.append((d, ok)))
+    pd.testing.assert_frame_equal(sequential, parallel)  # same rows, same shard order
+    assert [d for d, _ in calls] == [1, 2, 3, 4] and all(ok for _, ok in calls)
+    assert len(list(cache.glob("*.parquet"))) == 4 and not list(cache.glob("*.tmp"))
+    fs.opens.clear()
+    again = scan_metadata(fs, shards, cache_dir=cache, workers=3)
+    assert fs.opens == [] and len(again) == len(sequential)  # fully served from cache
+
+
+def test_scan_retries_then_records_failure(tmp_path: Path) -> None:
+    _write_shards(tmp_path, n_shards=3)
+    target = "train-00001.parquet"
+    shards = list_telugu_shards(PrefixFS(tmp_path))
+    failed: dict[str, str] = {}
+    ok = scan_metadata(FlakyFS(tmp_path, target, fail_times=2), shards, retries=2, failed=failed)
+    assert failed == {} and ok["_shard"].nunique() == 3  # two failures absorbed by retries
+    bad = scan_metadata(FlakyFS(tmp_path, target, fail_times=5), shards, retries=1, failed=failed)
+    assert list(failed) == [s for s in shards if s.endswith(target)] and bad["_shard"].nunique() == 2

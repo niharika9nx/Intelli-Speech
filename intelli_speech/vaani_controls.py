@@ -104,24 +104,88 @@ def _truthy(value: Any) -> bool:
     return str(value).strip().lower() in ("true", "1", "yes", "y", "t")
 
 
-def scan_metadata(fs, shards: list[str], columns: Iterable[str] = METADATA_COLUMNS) -> pd.DataFrame:
-    """Read non-audio columns of the given shards, keeping (shard, row_group, row) positions."""
+def scan_shard(fs, shard: str, columns: Iterable[str] = METADATA_COLUMNS) -> pd.DataFrame:
+    """Non-audio columns of one shard, with (shard, row_group, row) positions."""
     import pyarrow.parquet as pq
 
     frames = []
+    with fs.open(shard, "rb") as handle:
+        parquet = pq.ParquetFile(handle)
+        available = [c for c in columns if c in parquet.schema_arrow.names]
+        for rg in range(parquet.num_row_groups):
+            table = parquet.read_row_group(rg, columns=available).to_pandas()
+            table["_shard"] = shard
+            table["_row_group"] = rg
+            table["_row"] = np.arange(len(table))
+            frames.append(table)
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=[*columns, "_shard", "_row_group", "_row"])
+
+
+def _cache_name(shard: str) -> str:
+    return hashlib.sha1(shard.encode("utf-8")).hexdigest()[:16] + ".parquet"
+
+
+def scan_metadata(fs, shards: list[str], columns: Iterable[str] = METADATA_COLUMNS, *, cache_dir: Path | None = None,
+                  workers: int = 1, retries: int = 2, progress=None,
+                  failed: dict[str, str] | None = None) -> pd.DataFrame:
+    """Read non-audio columns of the given shards, keeping (shard, row_group, row) positions.
+
+    With ``cache_dir`` each shard's metadata is saved as it completes, so an interrupted
+    scan resumes without re-reading finished shards. ``workers`` > 1 reads shards in
+    parallel threads (network-bound). Shards that still fail after ``retries`` are
+    recorded in ``failed`` (shard -> error) and skipped. ``progress(done, total, shard, ok)``
+    is called after every shard.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    columns = tuple(columns)
+    cache = Path(cache_dir) if cache_dir else None
+    if cache:
+        cache.mkdir(parents=True, exist_ok=True)
+    frames: dict[str, pd.DataFrame] = {}
+    todo = []
     for shard in shards:
-        with fs.open(shard, "rb") as handle:
-            parquet = pq.ParquetFile(handle)
-            available = [c for c in columns if c in parquet.schema_arrow.names]
-            for rg in range(parquet.num_row_groups):
-                table = parquet.read_row_group(rg, columns=available).to_pandas()
-                table["_shard"] = shard
-                table["_row_group"] = rg
-                table["_row"] = np.arange(len(table))
-                frames.append(table)
-    if not frames:
+        cached = cache / _cache_name(shard) if cache else None
+        if cached is not None and cached.is_file():
+            frames[shard] = pd.read_parquet(cached)
+        else:
+            todo.append(shard)
+
+    def work(shard: str) -> pd.DataFrame:
+        last: Exception | None = None
+        for _ in range(retries + 1):
+            try:
+                frame = scan_shard(fs, shard, columns)
+                if cache:
+                    tmp = cache / (_cache_name(shard) + ".tmp")
+                    frame.to_parquet(tmp, index=False)
+                    tmp.replace(cache / _cache_name(shard))
+                return frame
+            except Exception as exc:  # network hiccups: retry, then report
+                last = exc
+        raise RuntimeError(f"{type(last).__name__}: {last}")
+
+    failed = failed if failed is not None else {}
+    done = len(frames)
+    if progress and done:
+        progress(done, len(shards), "(cached)", True)
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        futures = {pool.submit(work, s): s for s in todo}
+        for future in as_completed(futures):
+            shard = futures[future]
+            done += 1
+            try:
+                frames[shard] = future.result()
+                ok = True
+            except Exception as exc:
+                failed[shard] = str(exc)[:300]
+                ok = False
+            if progress:
+                progress(done, len(shards), shard, ok)
+    ordered = [frames[s] for s in shards if s in frames]
+    if not ordered:
         return pd.DataFrame(columns=[*columns, "_shard", "_row_group", "_row"])
-    return pd.concat(frames, ignore_index=True)
+    return pd.concat(ordered, ignore_index=True)
 
 
 def select_controls(metadata: pd.DataFrame, config: SelectionConfig = SelectionConfig()) -> tuple[pd.DataFrame, dict[str, Any]]:
@@ -207,19 +271,26 @@ def select_controls(metadata: pd.DataFrame, config: SelectionConfig = SelectionC
     return selected, report
 
 
-def estimate_audio_bytes(fs, selected: pd.DataFrame, audio_column: str = "audio") -> int:
-    """Compressed size of the audio column chunks that must be read for the selection."""
+def estimate_audio_bytes(fs, selected: pd.DataFrame, audio_column: str = "audio", workers: int = 1) -> int:
+    """Compressed size of the audio column chunks that must be read for the selection.
+
+    Only parquet footers are read; ``workers`` > 1 reads shard footers in parallel.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
     import pyarrow.parquet as pq
 
-    total = 0
-    for shard, groups in selected.groupby("_shard")["_row_group"]:
+    def shard_bytes(item) -> int:
+        shard, groups = item
         with fs.open(shard, "rb") as handle:
             meta = pq.ParquetFile(handle).metadata
-            names = [meta.schema.column(i).path.split(".")[0] for i in range(meta.num_columns)]
-            for rg in sorted(set(groups)):
-                row_group = meta.row_group(int(rg))
-                total += sum(row_group.column(i).total_compressed_size for i, n in enumerate(names) if n == audio_column)
-    return int(total)
+        names = [meta.schema.column(i).path.split(".")[0] for i in range(meta.num_columns)]
+        return sum(meta.row_group(int(float(rg))).column(i).total_compressed_size
+                   for rg in sorted(set(groups)) for i, n in enumerate(names) if n == audio_column)
+
+    items = list(selected.groupby("_shard")["_row_group"])
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        return int(sum(pool.map(shard_bytes, items)))
 
 
 def to_mono_16k(audio: np.ndarray, sample_rate: int) -> np.ndarray:
