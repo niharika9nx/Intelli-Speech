@@ -164,3 +164,16 @@ def test_textgrid_writer(tmp_path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     assert 'class = "IntervalTier"' in text and text.count("intervals [") == 5 + 1
     assert 'text = "aa"' in text and "size = 2" in text
+
+
+def test_ctc_align_long_transcript_does_not_overflow() -> None:
+    """Regression: > 63 targets (> 127 CTC states) overflowed an int8 back-pointer index."""
+    letters = "abcdeghijklmnoprstuvy"
+    targets = [VOCAB[letters[i % len(letters)]] for i in range(150)]
+    path = [0]
+    for t in targets:
+        path += [t, t, 0]
+    spans = ctc_align(_emissions(path), targets, blank=0)
+    assert len(spans) == 150 and spans[-1].end <= len(path)
+    assert all(a.end <= b.start for a, b in zip(spans[:-1], spans[1:]))
+    assert [(s.start, s.end) for s in spans[:2]] == [(1, 3), (4, 6)]

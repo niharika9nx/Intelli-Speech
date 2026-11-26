@@ -206,7 +206,7 @@ def ctc_align(log_probs: np.ndarray, targets: Sequence[int], blank: int = 0) -> 
     s = end
     for t in range(T - 1, -1, -1):
         states[t] = s
-        s -= back[t, s]
+        s -= int(back[t, s])   # back is int8: keep s a Python int (NEP 50 would make it int8)
     spans = []
     for i, tok in enumerate(targets):
         frames = np.flatnonzero(states == 2 * i + 1)
