@@ -121,6 +121,15 @@ Each component's contribution is shown by ablation under leave-one-speaker-out e
   - Activity ratio: 0.78 / 0.84 / 0.89 / 0.93 / 0.96
 - **Status:** **run**. The source set is ready for synthetic transforms. Pilot folders `synth_source_v1_pilot/` (failed run 1) and `synth_source_v1_pilot_r2/` are superseded.
 
+**Scope decision (2026-11-26, user-approved):** focus on **slurred speech (dysarthria), especially age-associated dysarthria (stroke, Parkinson's, ALS)**, with age-related voice changes as a secondary layer. Not all impairment types.
+- **Why:** temporal-only transforms (v0.1/v0.2) sounded like "poor audio quality", not impairment. The literature places the perceptual core of slurring in articulation:
+  - vowel centralization / formant centralization ratio: Sapir 2010, doi:10.1044/1092-4388(2009/08-0184); Carl & Icht 2021, doi:10.1111/1460-6984.12598;
+  - F2 range and articulation rate: Allison & Hustad 2018, doi:10.1044/2017_JSLHR-S-16-0414;
+  - the subsystem framework: Kent & Kim 2003, doi:10.1080/0269920031000086248.
+- **Healthy aging** mainly slows rate and adds pauses (Bóna 2014, doi:10.1121/1.4885482) and preserves vowel precision (Tykalova 2021, doi:10.1016/j.jvoice.2020.02.022), so slurring in older adults implies a disorder, not aging alone.
+- **Data risk:** the 7 Vaani atypical speakers come from mostly developmental conditions; condition and age are not recorded. Exp 2 must identify which speakers fit a slurring profile. Real older dysarthric Telugu recordings are needed for age-related claims (hospital or speech-therapy collection with ethics approval); English dysarthria corpora (e.g. TORGO, UASpeech) may be used for method development only.
+- **Next (pending the user's research-agent findings):** Exp 2, slurring-focused measurement: transcript-free FCR proxy, F1/F2 ranges, formant transition rate and extent, consonant burst sharpness, fricative spectra, H1–H2, loudness, F0 level. Then articulatory transforms (spectral-envelope temporal smoothing / undershoot, vowel centralization, consonant weakening) with an optional age-voice layer.
+
 **Temporal module v0.2 (2026-11-26), after the first listening check:**
 - **What the user heard in the v0.1 examples:** "glitched" audio and "slowed (slow-motion)" audio. No dataset had been generated, only about 840 validation transforms.
 - **Diagnosed causes:**

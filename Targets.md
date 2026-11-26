@@ -33,6 +33,9 @@
 
 ## Left
 
+### Scope (decided 2026-11-26)
+Slurred speech (dysarthria), especially in older adults (after stroke, Parkinson's, ALS), with age-related voice changes as an extra layer. Not every type of impairment.
+
 ### Phase 3: synthetic data and models
 **Component roles (decided 2026-11-22):**
 - **GMM:** identifies atypical speech and how strongly.
