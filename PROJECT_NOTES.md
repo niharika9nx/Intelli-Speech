@@ -121,6 +121,24 @@ Each component's contribution is shown by ablation under leave-one-speaker-out e
   - Activity ratio: 0.78 / 0.84 / 0.89 / 0.93 / 0.96
 - **Status:** **run**. The source set is ready for synthetic transforms. Pilot folders `synth_source_v1_pilot/` (failed run 1) and `synth_source_v1_pilot_r2/` are superseded.
 
+**Temporal module v0.2 (2026-11-26), after the first listening check:**
+- **What the user heard in the v0.1 examples:** "glitched" audio and "slowed (slow-motion)" audio. No dataset had been generated, only about 840 validation transforms.
+- **Diagnosed causes:**
+  1. The noise bed was built by joining all non-speech samples end to end, giving waveform jumps at every region boundary. Measured on synthetic tests, every high-frequency spike sat inside added pause audio.
+  2. Speech runs were stretched separately and butt-joined.
+  3. Noise loops were faded to zero, which made the pauses pump.
+  4. Pauses could be inserted at any low-energy point.
+  5. A uniform stretch factor makes speech sound like slow motion.
+- **Fixes:**
+  - One continuous **time-varying** WSOLA pass (30 ms window, ±15 ms search). The stretch is larger in steady frames and smaller in transients (transients get 35 % as much), the speech mean equals the profile stretch, and the maximum is 2.5.
+  - The noise bed is cut only from inside contiguous non-speech regions (30 ms guard from speech) and joined with 30 ms equal-power crossfades.
+  - Every splice uses a 10 ms equal-power crossfade.
+  - Pauses are inserted only at dips ≥ 10 dB below the run median that last ≥ 30 ms.
+  - Output length is exact, so there is no padded-zero tail.
+- **Click proxy (`click_score`):** pause edits now match the input (≤ 1.15×) across background levels. It is a **coarse** proxy and misses some waveform jumps, so listening remains the judge.
+- **Validation:** the run writes to `temporal_validation_temporal-0.2_<date>/` with four listening variants per example (input / stretch only / pauses only / both), so a complaint can be traced to a component.
+- **Status:** implemented and tested, **not yet run or listened to**.
+
 **DSP temporal module design (2026-11-26):**
 - **Time-stretch:** deterministic WSOLA (20 ms Hann windows, ±10 ms search), pitch-preserving. On synthetic tests the length ratio is exact, F0 changes by under 1 % and the articulation rate scales by the factor. Praat "Lengthen (overlap-add)" was rejected for the dataset because its output differs between identical calls (unvoiced pulse jitter); it is kept only as an option for listening comparisons.
 - **Pauses:**

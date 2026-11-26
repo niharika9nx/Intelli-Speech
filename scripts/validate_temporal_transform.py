@@ -36,7 +36,7 @@ import pandas as pd
 from intelli_speech import acoustic_features as af
 from intelli_speech.atypical_profiles import fit_fold, sample_params
 from intelli_speech.experiment import refuse_overwrite, utc_now, write_json
-from intelli_speech.temporal_transform import TemporalParams, transform
+from intelli_speech.temporal_transform import TRANSFORM_VERSION, TemporalParams, click_score, transform
 
 DEFAULT_DATA_ROOT = Path("/content/drive/MyDrive/Intelli-Speech-data")
 SR = 16000
@@ -72,7 +72,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     import soundfile as sf
 
     data_root = args.data_root.expanduser()
-    output = args.output_dir or data_root / "analysis_v2" / f"temporal_validation_{date.today().isoformat()}"
+    output = args.output_dir or data_root / "analysis_v2" / f"temporal_validation_{TRANSFORM_VERSION}_{date.today().isoformat()}"
     output.mkdir(parents=True, exist_ok=True)
     summary_path = refuse_overwrite(output / "summary.json", overwrite=args.overwrite)
     features = pd.read_csv(args.features, dtype={"speaker_id": str})
@@ -120,11 +120,18 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                 before, after = measure(audio), measure(y)
                 row.update({f"out_{k}": v for k, v in after.items()})
                 row["f0_ratio"] = (after["f0_median_hz"] / before["f0_median_hz"]) if before["f0_median_hz"] and after["f0_median_hz"] else None
-                row.update({"inserted_pauses": info["inserted_pauses"], "insertion_shortfall": info["insertion_shortfall"],
+                row.update({"click_in": click_score(audio, rate), "click_out": click_score(y, rate), "splices": info["splices"],
+                            "inserted_pauses": info["inserted_pauses"], "insertion_shortfall": info["insertion_shortfall"],
                             "output_s": info["output_s"], "input_s": info["input_s"]})
-                if n < args.examples_per_fold:
-                    sf.write(str(output / "examples" / f"{held}_{n:02d}_in.wav"), audio, rate, subtype="PCM_16")
-                    sf.write(str(output / "examples" / f"{held}_{n:02d}_out.wav"), y, rate, subtype="PCM_16")
+                if n < args.examples_per_fold:  # listening set: isolate which component sounds wrong
+                    stem = output / "examples" / f"{held}_{n:02d}"
+                    sf.write(f"{stem}_0_input.wav", audio, rate, subtype="PCM_16")
+                    only_stretch = TemporalParams(stretch=params.stretch, pause_rate_per_min=0.0, pause_mu=float(np.log(0.26)),
+                                                  pause_sigma=0.1, seed=params.seed)
+                    only_pauses = TemporalParams(**{**params.__dict__, "stretch": 1.0})
+                    sf.write(f"{stem}_1_stretch_only.wav", transform(audio, rate, only_stretch)[0], rate, subtype="PCM_16")
+                    sf.write(f"{stem}_2_pauses_only.wav", transform(audio, rate, only_pauses)[0], rate, subtype="PCM_16")
+                    sf.write(f"{stem}_3_both.wav", y, rate, subtype="PCM_16")
             except Exception as exc:
                 row["error"] = f"{type(exc).__name__}: {exc}"
             rows.append(row)
@@ -161,11 +168,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     coverage.to_csv(output / "coverage.csv", index=False)
 
     summary = {
-        "created_utc": utc_now(), "features": str(args.features), "source_dir": str(args.source_dir),
+        "created_utc": utc_now(), "transform_version": TRANSFORM_VERSION,
+        "features": str(args.features), "source_dir": str(args.source_dir),
         "clips_per_fold": args.clips_per_fold, "folds": len(alias), "transforms": int(len(table)),
         "errors": int(table["error"].notna().sum()) if "error" in table else 0,
         "f0_ratio_quantiles": ok["f0_ratio"].quantile([0.05, 0.5, 0.95]).round(4).tolist() if "f0_ratio" in ok else None,
         "insertion_shortfall_total": int(ok["insertion_shortfall"].sum()) if "insertion_shortfall" in ok else None,
+        "click_score_in_quantiles": ok["click_in"].quantile([0.5, 0.9, 0.99]).round(2).tolist() if "click_in" in ok else None,
+        "click_score_out_quantiles": ok["click_out"].quantile([0.5, 0.9, 0.99]).round(2).tolist() if "click_out" in ok else None,
+        "click_increase_gt_1p5x_fraction": round(float((ok["click_out"] > 1.5 * ok["click_in"]).mean()), 3) if "click_out" in ok else None,
         "calibration_median_abs_rel_error_by_feature": calibration.assign(a=calibration["rel_error"].abs())
             .groupby("feature")["a"].median().round(3).to_dict(),
         "calibration_outside_control_band_rate": round(float(calibration["outside_control_band_atypical_direction"].mean()), 3),
@@ -186,7 +197,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--clips-per-fold", type=int, default=120)
     parser.add_argument("--clips-per-speaker", type=int, default=3, help="Coverage clips per synthetic speaker.")
-    parser.add_argument("--examples-per-fold", type=int, default=2)
+    parser.add_argument("--examples-per-fold", type=int, default=4)
     parser.add_argument("--seed", type=int, default=20261126)
     parser.add_argument("--overwrite", action="store_true")
     return parser

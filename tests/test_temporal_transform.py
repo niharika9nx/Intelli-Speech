@@ -12,7 +12,7 @@ pytest.importorskip("parselmouth")
 
 from intelli_speech import acoustic_features as af
 from intelli_speech.atypical_profiles import fit_fold, sample_params
-from intelli_speech.temporal_transform import LABELS, TemporalParams, transform, wsola
+from intelli_speech.temporal_transform import LABELS, TemporalParams, click_score, stretch_contour, transform, wsola
 from tests.test_synth_source import _speechlike
 
 SR = 16000
@@ -140,3 +140,41 @@ def test_validation_script_end_to_end(tmp_path: Path) -> None:
         assert "REAL" not in path.read_text()
     assert "REAL" not in (out / "validation_clips.csv").read_text()
     assert main(args) == 1  # refuses to overwrite
+
+
+def test_contour_stretches_steady_more_than_transients_with_exact_mean() -> None:
+    x = _speechlike(4, background=0.003)
+    mask = af.energy_vad(x, SR)
+    contour = stretch_contour(x, SR, mask, 1.7)
+    assert abs(contour[mask].mean() - 1.7) < 1e-6
+    assert (contour[~mask] == 1.0).all()
+    assert contour[mask].max() - contour[mask].min() > 0.2  # non-uniform
+
+
+def test_pause_edits_do_not_add_clicks_and_no_padded_tail() -> None:
+    for background in (0.003, 0.01, 0.03):
+        x = _speechlike(5, background=background)
+        pauses = TemporalParams(stretch=1.0, pause_rate_per_min=45, pause_mu=float(np.log(0.8)), pause_sigma=0.4, seed=2)
+        y, _, info = transform(x, SR, pauses)
+        assert info["splices"] >= 3
+        assert click_score(y, SR) < 1.15 * click_score(x, SR)  # crossfaded, region-internal noise fill
+        both = TemporalParams(stretch=1.6, pause_rate_per_min=45, pause_mu=float(np.log(0.8)), pause_sigma=0.4, seed=2)
+        y2, _, _ = transform(x, SR, both)
+        assert click_score(y2, SR) < 1.6 * click_score(x, SR)
+        nz = np.flatnonzero(np.abs(y2) > 1e-7)
+        assert y2.size - 1 - nz[-1] == 0  # no padded zeros at the end
+
+
+def test_noise_bed_never_joins_separate_regions_without_crossfade() -> None:
+    from intelli_speech.temporal_transform import NoiseBed
+
+    rng = np.random.default_rng(0)
+    x = np.concatenate([np.full(SR, 0.02, np.float32), np.ones(SR // 2, np.float32) * 0.5, np.full(SR, -0.02, np.float32)])
+    mask = np.zeros(x.size, bool)
+    mask[SR: SR + SR // 2] = True  # "speech" between two DC-offset silences of opposite sign
+    bed = NoiseBed(x, mask, SR, rng)
+    assert len(bed.regions) == 2 and not bed.synthetic
+    out = bed.take(3 * SR)
+    assert np.max(np.abs(np.diff(out))) < 0.004  # sign changes only through crossfades, never a 0.04 jump
+    # speech (0.5) never leaks in; <= sqrt(2) x 0.02 is the equal-power bump for identical (DC) pieces
+    assert np.max(np.abs(out)) <= 0.02 * np.sqrt(2) + 1e-4
