@@ -485,7 +485,9 @@ def envelope_perturbation(x: np.ndarray, kind: str, level: float) -> np.ndarray:
         lsp = np.apply_along_axis(lambda c: np.convolve(c, kernel, mode="same"), 0, lsp)
     else:
         raise ValueError(kind)
-    y = pw.synthesize(f0, np.exp(lsp), ap, SR, frame_period=5.0)
+    # pyworld requires C-contiguous float64 arrays (apply_along_axis can return F-ordered data)
+    y = pw.synthesize(np.ascontiguousarray(f0, dtype=np.float64), np.ascontiguousarray(np.exp(lsp), dtype=np.float64),
+                      np.ascontiguousarray(ap, dtype=np.float64), SR, frame_period=5.0)
     return y[: xd.size].astype(np.float32)
 
 
