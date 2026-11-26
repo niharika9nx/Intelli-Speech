@@ -22,7 +22,7 @@ task. Update it only with observed evidence.
 | Balanced typical controls (≤40 spk × ≤10 clips, ≤400) | **run** 2026-11-22: 40 spk (20 F / 20 M), 126 clips, 12.4 min | Drive `typical_controls_v2/` (manifest + provenance, rev `9e6ed4f`) |
 | Speaker-independent folds | not started | — |
 | **2 Characterization (Exp 1–2)** | **run** 2026-11-22 (400 recordings, 0 errors): 17 candidate_class1 (all temporal + energy-modulation rate), 17 speaker_specific, 14 not_supported, 2 channel_confounded; robustness **run** 2026-11-22: **14 robust class-1 features** (see below) | features: `intelli_speech/acoustic_features.py` (`exp1-features-0.1`); `scripts/extract_features_exp1.py`; `scripts/analyze_exp1.py` (speaker-level catalogue); `EXP1_CHARACTERIZATION.ipynb` |
-| **3 Synthetic + models** | not started | — |
+| **3 Synthetic + models** | source set **run** (`synth_source_v1_full/`, 4,914 clips / 1,378 speakers / 7.1 h); DSP temporal module implemented + tested, **validation not run** | `intelli_speech/temporal_transform.py`, `intelli_speech/atypical_profiles.py`, `scripts/validate_temporal_transform.py`, `TEMPORAL_V1.ipynb` |
 | **4 Integration + evaluation** | not started | — |
 | **5 Prototype + delivery** | v1 app plumbing only (noise model) | `server/`, `app/` |
 
@@ -101,6 +101,39 @@ Each component's contribution is shown by ablation under leave-one-speaker-out e
   - Expected: ~4,000 usable clips, ~1,000 speakers, ~5 h (the target is reduced from 10 h because of the per-speaker clip scarcity).
   - Transfer cap: 25 GB (network). Output: `synth_source_v1_full/`.
 - **Known imbalance:** men outnumber women 2 : 1, to be handled by speaker-balanced sampling in training.
+
+**Synthetic-source full run (completed 2026-11-26, `synth_source_v1_full/`):**
+- **Plan:** 240 / 872 shards. 270,514 rows without speaker ID were excluded; 79 control speakers were excluded (3,028 rows). 4,637 identified speakers, median 3 clips each; 2,900 eligible (≥ 3 clips).
+- **Selection:** 1,667 speakers (834 F / 833 M), 7,000 clips (660 with transcripts), 21 districts. Estimated transfer 23.9 GB, ~1.15 GB written to Drive.
+- **Quality:** 6,995 clips screened, 5,056 pass (72.3 %). Rejections: low SNR 968, narrow bandwidth 910, clipping 141, little speech 34, low activity 8.
+- **Usable** (≥ 2 passing clips per speaker): **4,914 clips, 1,378 speakers, 427 min (7.1 h)**, 443 of them with transcripts.
+- **Speaker split:**
+
+  | | speakers (F / M) | clips | min |
+  |---|---|---|---|
+  | train | 1,104 (555 / 549) | 3,954 | 342 |
+  | val | 137 (69 / 68) | 496 | 43 |
+  | test | 137 (69 / 68) | 464 | 42 |
+
+- **Metric quantiles (10/25/50/75/90 %):**
+  - SNR estimate: 10.8 / 15.0 / 20.5 / 28.0 / 38.7 dB
+  - Bandwidth: 1.10 / 1.46 / 2.08 / 3.47 / 5.20 kHz
+  - Activity ratio: 0.78 / 0.84 / 0.89 / 0.93 / 0.96
+- **Status:** **run**. The source set is ready for synthetic transforms. Pilot folders `synth_source_v1_pilot/` (failed run 1) and `synth_source_v1_pilot_r2/` are superseded.
+
+**DSP temporal module design (2026-11-26):**
+- **Time-stretch:** deterministic WSOLA (20 ms Hann windows, ±10 ms search), pitch-preserving. On synthetic tests the length ratio is exact, F0 changes by under 1 % and the articulation rate scales by the factor. Praat "Lengthen (overlap-add)" was rejected for the dataset because its output differs between identical calls (unvoiced pulse jitter); it is kept only as an option for listening comparisons.
+- **Pauses:**
+  - The target count follows the profile pause rate per active minute.
+  - Existing pauses are lengthened to max(original, a draw).
+  - Extra pauses are inserted at low-energy points inside speech runs.
+  - Durations are drawn from a log-normal (median and P90 of each speaker's pauses ≥ 250 ms), truncated to 0.25–3 s.
+- **Added pause audio** is the clip's own background noise (looped), never digital silence.
+- **Frame labels (10 ms)** for ZF-Net localisation: edge silence, speech, original pause, lengthened part of a pause, inserted pause.
+- **Profiles per LOSO fold:** each is fitted from the 6 non-held-out atypical speakers relative to the `controls_v2` medians: stretch = control articulation rate / speaker articulation rate, plus the pause rate and the log-normal parameters.
+- **Synthetic speakers:** each one draws a profile, a degree α ∈ [0.3, 1] interpolating control → profile (α is the GMM "degree" label), and ±10 % jitter.
+- **Known measurement interaction:** inserting a pause at an inter-syllable gap merges the gap into the pause, so the measured articulation rate stays above the stretch-only value. Calibration on real clips (`TEMPORAL_V1.ipynb`) quantifies this before any dataset is generated.
+- **Generation plan (proposed):** the synthetic pairs are created on the fly in the training data loader (cheap: ~0.1–0.6 s per clip), with a fixed-seed val/test set materialised for each fold, instead of storing 7 fold copies.
 
 **Technical decisions (2026-11-22):**
 - **VAD:** an adaptive energy VAD (frames more than 35 dB below the 95th percentile, or within 6 dB of the floor, count as non-speech). It is deterministic and needs no download. It is less robust in noisy recordings, so a neural VAD (Silero) is a possible later upgrade.
