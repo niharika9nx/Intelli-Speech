@@ -233,3 +233,12 @@ def test_envelope_perturbation_requires_pyworld() -> None:
     else:
         with pytest.raises(ValueError):
             sa.envelope_perturbation(np.zeros(SR, np.float32), "bogus", 0.1)
+
+
+def test_channel_gate_zero_variance_is_incomplete_not_fail() -> None:
+    """Regression: all-zero control measure (e.g. no >1 s pauses in 6 s clips) gave tol=0 → false 'fail'."""
+    speakers = {f"r{i}": f"s{i // 2}" for i in range(20)}
+    zeros = _features({f"r{i}": 0.0 for i in range(20)}, speakers)
+    res = sa.channel_gate(zeros, {"lp": zeros, "hp": _features({f"r{i}": 0.5 for i in range(20)}, speakers)}, "m")
+    assert res["status"] == "incomplete" and "variance" in res["reason"]
+    assert {c["status"] for c in res["conditions"].values()} == {"not_evaluable"}

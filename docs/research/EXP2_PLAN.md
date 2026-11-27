@@ -336,3 +336,15 @@ The pass rule is the median |relative error| ≤ 10 % for F1 and F2 separately, 
 **Reference sample.**
 - `synth_source_v1_full`, **train split only**: speakers with at least 3 usable clips, up to 400 speakers, 3 clips each, chosen by salted hash.
 - All usable **train-split** clips with transcripts are used for alignment.
+
+### 13.5 Implementation correction (2026-11-27): undefined channel tolerance
+
+The channel-robustness tolerance is 0.25 × SD of control speaker medians (§13.4). If that SD is **0** (no between-speaker variance), the tolerance is undefined. The first implementation then treated "|0| < 0" as a failure.
+
+This happened for `pause_long_share_1s_win`: 6 s control clips almost never contain a pause over 1 s, so every control speaker's share was 0.
+
+**Corrected handling:**
+- The test is reported as **incomplete** with the reason "no between-speaker variance in controls". It is never a pass and never a fail.
+- Each condition is marked `not_evaluable`.
+
+**Not changed:** no threshold, condition or decision rule. The correction only stops an undefined comparison being read as a failure. The Stage A classification of `pause_long_share_1s_win` changes from "fail" to **incomplete** (channel test not evaluable; reliability passed, ICC(2,1) = 0.66).

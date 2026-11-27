@@ -220,7 +220,12 @@ def channel_gate(original: pd.DataFrame, conditioned: dict[str, pd.DataFrame], m
     tol = CHANNEL_TOL_SD_FRACTION * sd
     base = original.set_index("record_id")[measure]
     out: dict[str, Any] = {"tolerance": tol, "between_speaker_sd": sd, "conditions": {}}
-    status = "pass" if np.isfinite(tol) else "incomplete"
+    # Zero between-speaker spread makes the tolerance (and the test) undefined: never a pass,
+    # never a fail — reported as incomplete with the reason (not a threshold change).
+    evaluable = bool(np.isfinite(tol) and tol > 0)
+    if not evaluable:
+        out["reason"] = "no between-speaker variance in controls: tolerance undefined"
+    status = "pass" if evaluable else "incomplete"
     for name, frame in conditioned.items():
         if frame is None:
             out["conditions"][name] = {"status": "not_run"}
@@ -232,7 +237,10 @@ def channel_gate(original: pd.DataFrame, conditioned: dict[str, pd.DataFrame], m
             status = "incomplete" if status == "pass" else status
             continue
         shift = float((joined["cond"] - joined["orig"]).median())
-        ok = bool(np.isfinite(tol) and abs(shift) < tol)
+        if not evaluable:
+            out["conditions"][name] = {"status": "not_evaluable", "shift": shift, "n": int(len(joined))}
+            continue
+        ok = bool(abs(shift) < tol)
         out["conditions"][name] = {"status": "pass" if ok else "fail", "shift": shift, "n": int(len(joined))}
         if not ok:
             status = "fail"
